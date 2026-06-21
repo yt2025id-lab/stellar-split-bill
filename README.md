@@ -44,8 +44,8 @@ Result: 10 passed, 0 failed
 
 ## Deployed Contracts (Testnet)
 
-- **Split Token:** `TBD`
-- **Split Core:** `TBD`
+- **Split Token:** `CDOEW4PJG76SBL2OOUYVSB5I4LIOM6TPWQAWY4KXOOHP2LSLOQKPCJIH`
+- **Split Core:** `CBWCNSBR47PAXWU45SNALMEQ4OGWPBVRIK55ZAONSUKSC5AITN7FDRLT`
 
 ## CI/CD Pipeline
 
