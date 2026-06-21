@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, Send, MessageCircle } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { useDict } from "@/lib/i18n/LocaleProvider";
 import { useMagnetic } from "@/components/motion/useMagnetic";
 import { Button } from "@/components/ui/Button";
@@ -10,33 +10,6 @@ import { DAPP_URL } from "@/components/ui/MiniNav";
 
 const EXPLORER_URL =
   "https://stellar.expert/explorer/testnet/contract/CCRVTPOVHJZ7KLANM2AEPIQPLSDWIDK2M66GJQHFEHJVJPHGDCKQOGJ3";
-
-type IconProps = { className?: string };
-const InstagramIcon = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
-    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-    <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
-  </svg>
-);
-const XIcon = ({ className }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-  </svg>
-);
-
-const SOCIALS = [
-  { label: "Discord", href: "https://discord.gg/XxxM958bm", Icon: MessageCircle, color: "hover:bg-[#5865F2] hover:border-[#5865F2]" },
-  { label: "Telegram", href: "https://stellar.org/discord", Icon: Send, color: "hover:bg-[#0a9d6e] hover:border-[#0a9d6e]" },
-  { label: "Instagram", href: "https://stellar.org", Icon: InstagramIcon, color: "hover:bg-[#e0140a] hover:border-[#e0140a]" },
-  { label: "X / Twitter", href: "https://x.com/StellarOrg", Icon: XIcon, color: "hover:bg-[#0a0a0a] hover:border-[#0a0a0a]" },
-];
-
-const ECOSYSTEM = [
-  { label: "Stellar Network", href: "https://stellar.org" },
-  { label: "Soroban Docs", href: "https://developers.stellar.org" },
-  { label: "Stellar Expert", href: EXPLORER_URL },
-];
 
 export function Cta() {
   const dict = useDict();
@@ -88,9 +61,9 @@ export function Cta() {
         </div>
 
         <div className="rounded-b-2xl border-[3px] border-t-0 border-[#0a0a0a] bg-[#faf8f4] p-7 shadow-[6px_6px_0_#0a0a0a] sm:p-10">
-          <div className="grid gap-10 md:grid-cols-[1.3fr_0.8fr_0.8fr]">
-            {/* Brand + socials */}
-            <div>
+          <div className="grid gap-10">
+            {/* Brand */}
+            <div className="mx-auto max-w-md text-center">
               <div className="mb-3 flex items-center gap-3">
                 <span className="grid h-12 w-12 place-items-center rounded-xl border-[3px] border-[#0a0a0a] bg-gradient-to-br from-[#FFD700] via-[#d98200] to-[#e0140a] shadow-[3px_3px_0_#0a0a0a]">
                   <SplitBillLogo size={30} className="relative z-10 h-7 w-7" />
@@ -103,56 +76,6 @@ export function Cta() {
                 </div>
               </div>
               <p className="max-w-xs text-sm font-medium leading-7 text-[#5b6470]">{f.blurb}</p>
-              <div className="mt-5 flex gap-2">
-                {SOCIALS.map(({ label, href, Icon, color }) => (
-                  <a
-                    key={label}
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={label}
-                    data-cursor
-                    className={`grid size-10 place-items-center rounded-xl border-[3px] border-[#0a0a0a] bg-white text-[#0a0a0a] shadow-[3px_3px_0_#0a0a0a] transition-all hover:-translate-y-0.5 hover:text-white hover:shadow-[4px_4px_0_#0a0a0a] ${color}`}
-                  >
-                    <Icon className="size-4" />
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            {/* Product */}
-            <div>
-              <h4 className="mb-4 font-mono text-[10px] font-black uppercase tracking-[0.18em] text-[#d98200]">
-                {f.productTitle}
-              </h4>
-              <div className="flex flex-col gap-2.5">
-                {f.product.map((label, i) => {
-                  const colors = ["hover:text-[#FFD700]", "hover:text-[#d98200]", "hover:text-[#e0140a]", "hover:text-[#0a9d6e]", "hover:text-[#FFD700]", "hover:text-[#d98200]"];
-                  return (
-                    <a key={label} href="#" data-cursor className={`text-sm font-semibold text-[#5b6470] transition ${colors[i % colors.length]}`}>
-                      {label}
-                    </a>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Ecosystem */}
-            <div>
-              <h4 className="mb-4 font-mono text-[10px] font-black uppercase tracking-[0.18em] text-[#0a9d6e]">
-                {f.ecosystemTitle}
-              </h4>
-              <div className="flex flex-col gap-2.5">
-                {ECOSYSTEM.map(({ label, href }, i) => {
-                  const colors = ["hover:text-[#0a9d6e]", "hover:text-[#d98200]", "hover:text-[#e0140a]"];
-                  return (
-                    <a key={label} href={href} target="_blank" rel="noopener noreferrer" data-cursor className={`inline-flex items-center gap-1.5 text-sm font-semibold text-[#5b6470] transition ${colors[i % colors.length]}`}>
-                      {label}
-                      <ArrowUpRight className="size-3" />
-                    </a>
-                  );
-                })}
-              </div>
             </div>
           </div>
 
