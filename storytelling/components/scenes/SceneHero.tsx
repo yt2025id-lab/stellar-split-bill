@@ -1,17 +1,15 @@
 "use client";
 
-import Image from "next/image";
-import { Zap, ArrowDown, Check } from "lucide-react";
+import { Zap, ArrowDown, Check, Users, Receipt, Wallet } from "lucide-react";
 import { useDict } from "@/lib/i18n/LocaleProvider";
 import { DAPP_URL } from "@/components/ui/MiniNav";
 import { SplitBillLogo } from "@/components/brand/SplitBillLogo";
 
-const DOT = ["var(--color-stellar)", "var(--color-amber)", "var(--color-teal)", "var(--color-stellar)"];
+const COLORS = ["var(--color-stellar)", "var(--color-amber)", "var(--color-teal)", "var(--color-crack)"];
 
 export function SceneHero({ active }: { active: boolean }) {
   const dict = useDict();
   const h = dict.hero;
-  const ticker = [...h.ticker, ...h.ticker];
 
   return (
     <div
@@ -23,143 +21,155 @@ export function SceneHero({ active }: { active: boolean }) {
         className="pointer-events-none absolute inset-0 -z-10"
         style={{
           backgroundImage:
-            "linear-gradient(to right, rgba(10,10,10,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(10,10,10,0.05) 1px, transparent 1px)",
-          backgroundSize: "40px 40px",
+            "linear-gradient(to right, rgba(10,10,10,0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(10,10,10,0.04) 1px, transparent 1px)",
+          backgroundSize: "48px 48px",
         }}
         aria-hidden
       />
 
-      {/* Idle-drifting brutalist blocks (always moving + cross-fades with the scene) */}
-      <div className="drift pointer-events-none absolute left-[6%] top-[22%] hidden h-12 w-12 border-[3px] border-[var(--color-stellar)] bg-[var(--color-stellar)] lg:block" style={{ animationDelay: "0s" }} aria-hidden />
-      <div className="drift pointer-events-none absolute left-[44%] top-[12%] hidden h-8 w-8 rotate-45 border-[3px] border-[var(--color-amber)] bg-[var(--color-amber)] lg:block" style={{ animationDelay: "-3s" }} aria-hidden />
-      <div className="drift pointer-events-none absolute bottom-[20%] left-[40%] hidden h-10 w-10 border-[3px] border-[var(--color-teal)] lg:block" style={{ animationDelay: "-6s" }} aria-hidden />
+      {/* Decorative blobs */}
+      <div aria-hidden className="pointer-events-none absolute -left-32 top-0 h-96 w-96 rounded-full bg-[var(--color-stellar)]/8 blur-3xl" />
+      <div aria-hidden className="pointer-events-none absolute -right-24 bottom-0 h-80 w-80 rounded-full bg-[#FFD700]/10 blur-3xl" />
 
-      {/* Floating 3D Split Bill art behind the card */}
-      <div className="float-y pointer-events-none absolute right-[2%] top-[14%] -z-10 hidden w-[clamp(220px,22vw,360px)] opacity-20 lg:block" aria-hidden>
-        <Image src="/stellar-logo.png" alt="" width={360} height={360} className="h-auto w-full object-contain" />
-      </div>
+      {/* Floating blocks */}
+      <div className="drift pointer-events-none absolute left-[8%] top-[20%] hidden h-14 w-14 rounded-xl border-[3px] border-[var(--color-text)] bg-[var(--color-stellar)] shadow-[4px_4px_0_#0a0a0a] lg:block" style={{ animationDelay: "0s" }} aria-hidden />
+      <div className="drift pointer-events-none absolute right-[12%] top-[18%] hidden h-10 w-10 rotate-12 rounded-lg border-[3px] border-[var(--color-text)] bg-[#FFD700] shadow-[3px_3px_0_#0a0a0a] lg:block" style={{ animationDelay: "-2s" }} aria-hidden />
+      <div className="drift pointer-events-none absolute bottom-[25%] left-[15%] hidden h-8 w-8 -rotate-12 rounded-lg border-[3px] border-[var(--color-text)] bg-[#0a9d6e] shadow-[3px_3px_0_#0a0a0a] lg:block" style={{ animationDelay: "-5s" }} aria-hidden />
 
-      <div className="grid w-full max-w-5xl grid-cols-1 items-center gap-10 pt-24 pb-16 lg:grid-cols-[1.05fr_0.95fr]">
-        {/* ── Left: copy ── */}
+      <div className="grid w-full max-w-6xl grid-cols-1 items-center gap-12 pt-24 pb-16 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16">
+        {/* ── Left: headline + story ── */}
         <div>
+          {/* Badge */}
           <p
-            className="scene-item brutal-badge inline-flex items-center gap-2 px-3 py-1.5 text-[10px]"
-            style={{ background: "var(--color-amber)", color: "var(--color-ink)", transitionDelay: "0ms" }}
+            className="scene-item inline-flex items-center gap-2 rounded-full border-[2px] border-[#0a0a0a] bg-white px-4 py-2 text-[11px] font-black uppercase tracking-[0.15em] shadow-[3px_3px_0_#0a0a0a]"
+            style={{ transitionDelay: "0ms" }}
           >
-            <span className="inline-block h-2 w-2 rounded-full bg-[var(--color-ink)]" />
+            <span className="flex h-2 w-2 animate-pulse rounded-full bg-[#0a9d6e]" />
             {h.badge}
           </p>
 
-          <h1 className="font-display mt-5 leading-[0.82]">
-            <span className="scene-item block text-[13vw] sm:text-[5.5rem] lg:text-[7.5rem]" style={{ transitionDelay: "120ms" }}>
+          {/* Main headline */}
+          <h1 className="font-display mt-6 leading-[0.88]">
+            <span className="scene-item block text-[15vw] sm:text-[7rem] lg:text-[8.5rem]" style={{ transitionDelay: "100ms" }}>
               {h.titleLine1}
             </span>
-            <span
-              className="scene-item block text-[13vw] sm:text-[5.5rem] lg:text-[7.5rem]"
-              style={{ color: "var(--color-stellar)", transitionDelay: "200ms" }}
-            >
+            <span className="scene-item block text-[15vw] sm:text-[7rem] lg:text-[8.5rem]" style={{ color: "var(--color-stellar)", transitionDelay: "180ms" }}>
               {h.titleLine2}
             </span>
-            <span className="scene-item mt-1 flex items-center gap-3 text-[9vw] sm:text-[3.5rem]" style={{ transitionDelay: "280ms" }}>
-              <span>{h.titleLead}</span>
-              <span className="inline-block border-[3px] border-[var(--color-text)] bg-[var(--color-text)] px-3 py-0.5 text-[var(--color-stellar)] brutal-shadow">
+            <span className="scene-item mt-2 flex flex-wrap items-center gap-3 text-[8vw] sm:text-[3rem] lg:text-[3.5rem]" style={{ transitionDelay: "260ms" }}>
+              {h.titleLead}
+              <span className="inline-block rounded-lg border-[3px] border-[#0a0a0a] bg-[#0a0a0a] px-4 py-1 text-[var(--color-stellar)] shadow-[4px_4px_0_#0a0a0a]">
                 Stellar
               </span>
             </span>
           </h1>
 
-          <div className="scene-item mt-6 max-w-md border-l-[5px] border-[var(--color-stellar)] pl-4" style={{ transitionDelay: "360ms" }}>
-            <p className="text-base text-[var(--color-text)]">{h.lead}</p>
-            <p className="mt-1 text-base font-bold text-[var(--color-text)]">{h.leadStrong}</p>
+          {/* Story line */}
+          <div className="scene-item mt-7 max-w-lg" style={{ transitionDelay: "340ms" }}>
+            <div className="rounded-xl border-[3px] border-[#0a0a0a] bg-gradient-to-r from-[#faf8f4] to-[#fff7ed] p-5 shadow-[4px_4px_0_#0a0a0a]">
+              <p className="flex items-start gap-2 text-sm font-semibold leading-relaxed text-[#5b6470]">
+                <span className="mt-0.5 shrink-0 text-lg">💬</span>
+                <span>&ldquo;Bro, nanti gue transfer ya&rdquo; — 2 hari kemudian masih belum. Split Bill ubah janji lisan jadi <strong>kontrak on-chain yang nggak bisa diingkari.</strong></span>
+              </p>
+            </div>
           </div>
 
-          <p className="scene-item mt-4 text-sm font-semibold text-[var(--color-muted)]" style={{ transitionDelay: "420ms" }}>
-            {h.features}
-          </p>
+          {/* Features pills */}
+          <div className="scene-item mt-5 flex flex-wrap gap-2" style={{ transitionDelay: "400ms" }}>
+            {[
+              { icon: <Receipt className="size-3.5" />, label: "Even Splits", bg: "#FFD700" },
+              { icon: <Wallet className="size-3.5" />, label: "On-Chain Settlement", bg: "#0a9d6e" },
+              { icon: <Users className="size-3.5" />, label: "Friend Invites", bg: "var(--color-stellar)" },
+            ].map((f, i) => (
+              <span key={i} className="inline-flex items-center gap-1.5 rounded-full border-[2px] border-[#0a0a0a] px-3 py-1.5 text-[11px] font-bold shadow-[2px_2px_0_#0a0a0a]" style={{ background: f.bg }}>
+                {f.icon} {f.label}
+              </span>
+            ))}
+          </div>
 
-          <div className="scene-item mt-7 flex flex-wrap gap-4" style={{ transitionDelay: "500ms" }}>
+          {/* CTAs */}
+          <div className="scene-item mt-8 flex flex-wrap gap-4" style={{ transitionDelay: "480ms" }}>
             <a
               href={DAPP_URL}
               target="_blank"
               rel="noopener noreferrer"
               data-cursor
-              className="brutal-btn bg-[var(--color-surface)] px-6 py-3 text-sm text-[var(--color-text)]"
+              className="inline-flex items-center gap-2 rounded-xl border-[3px] border-[#0a0a0a] bg-[#0a9d6e] px-8 py-4 text-base font-black uppercase tracking-wider text-white shadow-[5px_5px_0_#0a0a0a] transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-[#0ebd86] hover:shadow-[7px_7px_0_#0a0a0a] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[2px_2px_0_#0a0a0a]"
             >
-              <Zap className="h-4 w-4 text-[var(--color-amber)]" strokeWidth={3} />
+              <Zap className="h-5 w-5 fill-white" strokeWidth={0} />
               {h.ctaPrimary}
             </a>
-            <a href="#sistem" data-cursor className="brutal-btn bg-[var(--color-base)] px-6 py-3 text-sm text-[var(--color-text)]">
+            <a
+              href="#sistem"
+              data-cursor
+              className="inline-flex items-center gap-2 rounded-xl border-[3px] border-[#0a0a0a] bg-white px-8 py-4 text-base font-black uppercase tracking-wider text-[#0a0a0a] shadow-[5px_5px_0_#0a0a0a] transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[7px_7px_0_#0a0a0a] active:translate-x-0.5 active:translate-y-0.5 active:shadow-[2px_2px_0_#0a0a0a]"
+            >
               {h.ctaSecondary}
             </a>
           </div>
         </div>
 
-        {/* ── Right: protocol card + stats ── */}
-        <div className="flex flex-col gap-3">
+        {/* ── Right: visual card ── */}
+        <div className="flex flex-col gap-4">
+          {/* Protocol card */}
           <div
-            className="scene-item relative border-[4px] border-[var(--color-text)] bg-[var(--color-surface)] p-5 brutal-shadow"
-            style={{ transitionDelay: "240ms" }}
+            className="scene-item relative rounded-2xl border-[4px] border-[#0a0a0a] bg-white p-6 shadow-[8px_8px_0_#0a0a0a]"
+            style={{ transitionDelay: "200ms" }}
           >
-            <span className="absolute -top-3 right-5 border-[3px] border-[var(--color-text)] bg-[var(--color-stellar)] px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.18em] text-[var(--color-ink)]">
+            <span className="absolute -top-3.5 right-6 rounded-full border-[3px] border-[#0a0a0a] bg-[var(--color-stellar)] px-3 py-1 text-[10px] font-black uppercase tracking-[0.15em] text-white shadow-[3px_3px_0_#0a0a0a]">
               {h.builtOn}
             </span>
-            <p className="mb-3 text-center text-[10px] font-black uppercase tracking-[0.28em] text-[var(--color-muted)]">
-              {h.cardTitle}
-            </p>
 
-            {/* Protocol emblem - logo only, with a continuously spinning ring */}
-            <div className="relative mx-auto flex aspect-square w-full max-w-[230px] items-center justify-center">
+            {/* Logo ring */}
+            <div className="relative mx-auto mb-4 flex aspect-square w-full max-w-[180px] items-center justify-center">
               <svg className="spin-slow absolute inset-0 h-full w-full" viewBox="0 0 100 100" aria-hidden>
-                <circle cx="50" cy="50" r="47" fill="none" stroke="var(--color-text)" strokeWidth="1.5" strokeDasharray="6 5" />
+                <circle cx="50" cy="50" r="45" fill="none" stroke="var(--color-text)" strokeWidth="2" strokeDasharray="8 6" />
+                <circle cx="50" cy="50" r="38" fill="none" stroke="var(--color-stellar)" strokeWidth="1" strokeDasharray="4 8" opacity="0.4" />
               </svg>
-              <div className="flex aspect-square w-[88%] items-center justify-center rounded-full border-[4px] border-[var(--color-text)] bg-[var(--color-stellar)]">
-                <span className="grid h-[80%] w-[80%] place-items-center rounded-full bg-[var(--color-surface)]">
-                  <SplitBillLogo size={170} className="h-[88%] w-[88%]" />
+              <div className="flex aspect-square w-[78%] items-center justify-center rounded-full border-[4px] border-[#0a0a0a] bg-[var(--color-stellar)] shadow-[4px_4px_0_#0a0a0a]">
+                <span className="grid h-[75%] w-[75%] place-items-center rounded-full bg-white">
+                  <SplitBillLogo size={120} className="h-[82%] w-[82%]" />
                 </span>
               </div>
             </div>
 
-            <span className="brutal-badge absolute -bottom-3 right-6 inline-flex items-center gap-1 bg-[var(--color-amber)] px-2 py-1 text-[10px] text-[var(--color-ink)]">
-              {h.live} <Check className="h-3 w-3" strokeWidth={4} />
-            </span>
-          </div>
-
-          <div className="scene-item grid grid-cols-2 gap-3" style={{ transitionDelay: "360ms" }}>
-            <div className="border-[3px] border-[var(--color-text)] bg-[var(--color-surface)] p-3 brutal-shadow">
-              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--color-muted)]">{h.stats[0].label}</p>
-              <p className="font-display text-2xl" style={{ color: "var(--color-stellar)" }}>{h.stats[0].value}</p>
-            </div>
-            <div className="border-[3px] border-[var(--color-text)] bg-[var(--color-surface)] p-3 brutal-shadow">
-              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--color-muted)]">{h.stats[1].label}</p>
-              <p className="font-display text-2xl" style={{ color: "var(--color-crack)" }}>{h.stats[1].value}</p>
-            </div>
-          </div>
-
-          <div className="scene-item border-[3px] border-[var(--color-text)] bg-[var(--color-text)] p-3 brutal-shadow" style={{ transitionDelay: "440ms" }}>
-            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--color-muted)]">{h.stats[2].label}</p>
-            <p className="text-sm font-black uppercase tracking-wide text-[var(--color-surface)]">
-              <span style={{ color: "var(--color-stellar)" }}>100%</span> {h.stats[2].value.replace("100% ", "")}
+            <p className="text-center font-mono text-[10px] font-black uppercase tracking-[0.25em] text-[#5b6470]">
+              {h.cardTitle}
             </p>
+          </div>
+
+          {/* Stats grid */}
+          <div className="scene-item grid grid-cols-3 gap-3" style={{ transitionDelay: "320ms" }}>
+            {[
+              { value: "Instant", label: "Settlement", color: "var(--color-stellar)" },
+              { value: "Zero", label: "Disputes", color: "#0a9d6e" },
+              { value: "Even", label: "Splits", color: "#FFD700" },
+            ].map((s, i) => (
+              <div key={i} className="rounded-xl border-[3px] border-[#0a0a0a] bg-white p-3 text-center shadow-[4px_4px_0_#0a0a0a]">
+                <p className="font-display text-2xl" style={{ color: s.color }}>{s.value}</p>
+                <p className="mt-0.5 text-[9px] font-black uppercase tracking-[0.15em] text-[#5b6470]">{s.label}</p>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* ── Bottom feature ticker - continuous marquee ── */}
-      <div className="absolute inset-x-0 bottom-0 overflow-hidden border-t-[3px] border-[var(--color-text)] bg-[var(--color-text)] py-3">
+      {/* Bottom ticker */}
+      <div className="absolute inset-x-0 bottom-14 overflow-hidden border-y-[3px] border-[#0a0a0a] bg-[#0a0a0a] py-3 sm:bottom-0">
         <div className="marquee-x flex w-max items-center gap-10 whitespace-nowrap">
-          {ticker.map((item, i) => (
-            <span key={i} className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-[var(--color-surface)]">
-              <span className="inline-block h-2 w-2 rounded-full" style={{ background: DOT[i % DOT.length] }} />
+          {[...h.ticker, ...h.ticker].map((item, i) => (
+            <span key={i} className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.15em] text-white">
+              <span className="inline-block h-2 w-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
               {item}
             </span>
           ))}
         </div>
       </div>
 
-      {/* ── Scroll cue ── */}
-      <div className="absolute bottom-14 left-1/2 hidden -translate-x-1/2 sm:block">
-        <div className="flex h-10 w-10 items-center justify-center border-[3px] border-[var(--color-text)] bg-[var(--color-surface)] brutal-shadow">
-          <ArrowDown className="h-5 w-5 animate-bounce text-[var(--color-text)]" strokeWidth={3} />
+      {/* Scroll cue */}
+      <div className="pointer-events-none absolute bottom-5 left-1/2 hidden -translate-x-1/2 sm:block">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl border-[3px] border-[#0a0a0a] bg-white shadow-[4px_4px_0_#0a0a0a]">
+          <ArrowDown className="h-6 w-6 animate-bounce text-[#0a0a0a]" strokeWidth={3} />
         </div>
       </div>
     </div>
