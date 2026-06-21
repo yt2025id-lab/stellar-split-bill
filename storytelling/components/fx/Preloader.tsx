@@ -5,7 +5,7 @@ import { useGSAP } from "@gsap/react";
 import { useRef } from "react";
 import { gsap } from "gsap";
 import { prefersReducedMotion } from "@/lib/motion";
-import { SuivanLogo } from "@/components/brand/SuivanLogo";
+import { SplitBillLogo } from "@/components/brand/SplitBillLogo";
 
 /**
  * Short cinematic intro: the wordmark wipes up behind a mask, holds briefly,
@@ -54,7 +54,7 @@ export function Preloader() {
       className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-[var(--color-base)]"
       aria-hidden
     >
-      <SuivanLogo size={120} priority className="pre-mark h-28 w-28" />
+      <SplitBillLogo size={120} priority className="pre-mark h-28 w-28" />
       <div className="pre-word font-display mt-5 overflow-hidden text-3xl tracking-[0.3em]">
         <span className="inline-block">Split Protocol</span>
       </div>

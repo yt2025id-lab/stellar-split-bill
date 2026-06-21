@@ -6,7 +6,7 @@ import { useBoldReveal } from "@/components/motion/useBoldReveal";
 import { useMagnetic } from "@/components/motion/useMagnetic";
 import { Button } from "@/components/ui/Button";
 import { GhostWord } from "@/components/ui/GhostWord";
-import { SuivanLogo } from "@/components/brand/SuivanLogo";
+import { SplitBillLogo } from "@/components/brand/SplitBillLogo";
 import { DAPP_URL } from "@/components/ui/MiniNav";
 
 const EXPLORER_URL =
@@ -73,7 +73,7 @@ export function Cta() {
           {/* Brand + socials */}
           <div>
             <div className="mb-3 flex items-center gap-3">
-              <SuivanLogo size={36} className="h-9 w-9" />
+              <SplitBillLogo size={36} className="h-9 w-9" />
               <div>
                 <span className="font-display block text-xl text-[var(--color-surface)]">Split Bill</span>
                 <span className="font-display block text-[10px] uppercase tracking-[0.18em] text-[var(--color-sui)]">{f.tagline}</span>

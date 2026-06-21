@@ -1,14 +1,14 @@
 import Image from "next/image";
 
-/** The Split Bill emblem (community circle + wordmark), from stellar-logo.png. */
+/** Split Bill brand mark — Stellar logo with optional wordmark. */
 export function SplitBillLogo({
-  size = 40,
-  className = "",
+  size = 28,
   priority = false,
+  className = "",
 }: {
   size?: number;
-  className?: string;
   priority?: boolean;
+  className?: string;
 }) {
   return (
     <Image

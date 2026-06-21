@@ -3,7 +3,7 @@
 import { useDict } from "@/lib/i18n/LocaleProvider";
 import { LanguageSwitch } from "./LanguageSwitch";
 import { Button } from "./Button";
-import { SuivanLogo } from "@/components/brand/SuivanLogo";
+import { SplitBillLogo } from "@/components/brand/SplitBillLogo";
 
 export const DAPP_URL = "https://split-bill.vercel.app";
 
@@ -13,7 +13,7 @@ export function MiniNav() {
     <header className="fixed inset-x-0 top-0 z-50 flex items-center justify-between px-5 py-4 sm:px-8">
       <a href="#hero" className="flex items-center gap-3" aria-label="Split Bill home" data-cursor>
         <span className="grid h-10 w-10 place-items-center border-[3px] border-[var(--color-text)] bg-[var(--color-surface)] brutal-shadow">
-          <SuivanLogo size={28} priority className="h-7 w-7" />
+          <SplitBillLogo size={28} priority className="h-7 w-7" />
         </span>
         <span className="flex flex-col items-start leading-none">
           <span className="font-display text-2xl">Split Bill</span>

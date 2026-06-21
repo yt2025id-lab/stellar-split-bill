@@ -4,7 +4,7 @@ import Image from "next/image";
 import { Zap, ArrowDown, Check } from "lucide-react";
 import { useDict } from "@/lib/i18n/LocaleProvider";
 import { DAPP_URL } from "@/components/ui/MiniNav";
-import { SuivanLogo } from "@/components/brand/SuivanLogo";
+import { SplitBillLogo } from "@/components/brand/SplitBillLogo";
 
 const DOT = ["var(--color-sui)", "var(--color-amber)", "var(--color-teal)", "var(--color-sui)"];
 
@@ -114,7 +114,7 @@ export function SceneHero({ active }: { active: boolean }) {
               </svg>
               <div className="flex aspect-square w-[88%] items-center justify-center rounded-full border-[4px] border-[var(--color-text)] bg-[var(--color-sui)]">
                 <span className="grid h-[80%] w-[80%] place-items-center rounded-full bg-[var(--color-surface)]">
-                  <SuivanLogo size={170} className="h-[88%] w-[88%]" />
+                  <SplitBillLogo size={170} className="h-[88%] w-[88%]" />
                 </span>
               </div>
             </div>
