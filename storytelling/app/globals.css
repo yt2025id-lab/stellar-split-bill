@@ -1,0 +1,242 @@
+@import "tailwindcss";
+
+/* ── Light neo-brutalism, matching the bright Suivan dApp + demo video ── */
+@theme {
+  --color-base: #faf8f4;     /* bright warm-white background */
+  --color-text: #0a0a0a;     /* ink (text + borders + hard shadows) */
+  --color-muted: #5b6470;
+  --color-surface: #ffffff;  /* white card surface */
+  --color-ink: #0a0a0a;      /* near-black, for text on bright accents */
+
+  --color-sui: #0c8ce9;      /* primary accent — sky */
+  --color-teal: #0a9d6e;     /* solution / yield — teal-green */
+  --color-amber: #d98200;    /* tradition — amber */
+  --color-crack: #e0140a;    /* the trust "crack" — red */
+}
+
+:root {
+  color-scheme: light;
+  /* next/font injects --font-display (Bebas Neue), --font-body (Inter),
+     --font-num (Space Grotesk). */
+}
+
+html {
+  background: var(--color-base);
+  color: var(--color-text);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  background: var(--color-base);
+  overflow-x: hidden;
+}
+
+/* Bebas Neue: condensed all-caps display face for headlines + ghost words */
+.font-display {
+  font-family: var(--font-display), system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+
+/* Space Grotesk for numerals (Bebas has no tabular figures) */
+.font-num {
+  font-family: var(--font-num), system-ui, sans-serif;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Brutalist building blocks ── */
+.brutal-card {
+  background: var(--color-surface);
+  border: 3px solid var(--color-text);
+  box-shadow: 8px 8px 0 var(--color-text);
+  border-radius: 0;
+}
+.brutal-card-lg {
+  border: 4px solid var(--color-text);
+  box-shadow: 12px 12px 0 var(--color-text);
+  border-radius: 0;
+}
+.brutal-shadow {
+  box-shadow: 8px 8px 0 var(--color-text);
+}
+.brutal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 3px solid var(--color-text);
+  box-shadow: 6px 6px 0 var(--color-text);
+  border-radius: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.brutal-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 9px 9px 0 var(--color-text);
+}
+.brutal-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 3px 3px 0 var(--color-text);
+}
+.brutal-badge {
+  display: inline-block;
+  border: 2px solid var(--color-text);
+  box-shadow: 3px 3px 0 var(--color-text);
+  border-radius: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+}
+/* Outlined "ghost" headline — set stroke colour inline per section */
+.ghost-outline {
+  color: transparent;
+  -webkit-text-stroke: 2px rgba(245, 240, 235, 0.1);
+}
+
+/* ── Scene-deck per-element entrance (staggered when a scene is active) ── */
+.scene-item {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  will-change: opacity, transform;
+}
+.is-active .scene-item {
+  opacity: 1;
+  transform: none;
+}
+
+/* ── Hero "orange lines" strip loop (product-act banner) ── */
+@keyframes slide-strip {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
+
+/* ── Continuous horizontal marquee (always-moving ticker) ── */
+@keyframes marquee-x {
+  to { transform: translateX(-50%); }
+}
+.marquee-x {
+  animation: marquee-x 20s linear infinite;
+}
+
+/* ── Idle drift for decorative brutalist blocks ── */
+@keyframes drift {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  33% { transform: translate(12px, -16px) rotate(6deg); }
+  66% { transform: translate(-10px, 10px) rotate(-5deg); }
+}
+.drift {
+  animation: drift 9s ease-in-out infinite;
+}
+
+/* ── Continuous rotation for decorative graphics ── */
+@keyframes spin-cw {
+  to { transform: rotate(360deg); }
+}
+@keyframes spin-ccw {
+  to { transform: rotate(-360deg); }
+}
+.spin-slow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: spin-cw 26s linear infinite;
+}
+.spin-rev {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: spin-ccw 34s linear infinite;
+}
+
+/* ── Living spark (Percikan) ── */
+@keyframes spark-flicker {
+  0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
+  45% { opacity: 0.72; transform: scale(1.07) rotate(-2deg); }
+  70% { opacity: 1; transform: scale(0.97) rotate(1.5deg); }
+}
+.spark-anim {
+  animation: spark-flicker 1.5s ease-in-out infinite;
+  transform-origin: center;
+}
+@keyframes spark-glow {
+  0%, 100% { opacity: 0.3; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.65; transform: translate(-50%, -50%) scale(1.3); }
+}
+.spark-glow {
+  animation: spark-glow 1.8s ease-in-out infinite;
+}
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+.float-y {
+  animation: float-y 3s ease-in-out infinite;
+}
+
+/* ── Structural grid texture (no soft grain in brutalism) ── */
+.fx-grid {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background-image:
+    linear-gradient(to right, rgba(10, 10, 10, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(10, 10, 10, 0.05) 1px, transparent 1px);
+  background-size: 72px 72px;
+}
+
+/* ── Custom cursor: square brutalist ring + solid dot ── */
+@media (pointer: fine) {
+  body,
+  a,
+  button,
+  [data-cursor] {
+    cursor: none;
+  }
+}
+.cursor-dot,
+.cursor-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 100;
+  transform: translate3d(-50%, -50%, 0);
+  will-change: transform;
+}
+.cursor-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--color-sui);
+}
+.cursor-ring {
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--color-text);
+  transition: width 0.2s ease, height 0.2s ease, border-color 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  @media (pointer: fine) {
+    body,
+    a,
+    button,
+    [data-cursor] {
+      cursor: auto;
+    }
+  }
+}
