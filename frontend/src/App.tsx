@@ -16,8 +16,8 @@ import {
 const HORIZON_URL = "https://horizon-testnet.stellar.org";
 const RPC_URL = "https://soroban-testnet.stellar.org";
 
-const TOKEN_ID = "CDOEW4PJG76SBL2OOUYVSB5I4LIOM6TPWQAWY4KXOOHP2LSLOQKPCJIH";
-const CORE_ID = "CBWCNSBR47PAXWU45SNALMEQ4OGWPBVRIK55ZAONSUKSC5AITN7FDRLT";
+const TOKEN_ID = "CCJ5MEBLFYVFOPN4EDO53IFQOCBWHO7SGIFEWXSKCTNHGTBZ6TTY53X5";
+const CORE_ID = "CCRVTPOVHJZ7KLANM2AEPIQPLSDWIDK2M66GJQHFEHJVJPHGDCKQOGJ3";
 
 const server = new Horizon.Server(HORIZON_URL);
 const appKeypair = Keypair.random();
@@ -57,6 +57,7 @@ export default function App() {
   const [desc, setDesc] = useState("");
   const [amount, setAmount] = useState("");
   const [payers, setPayers] = useState("");
+  const [payersList, setPayersList] = useState<string[]>([]);
   const [billTx, setBillTx] = useState<TxState>("idle");
   const [payTx, setPayTx] = useState<TxState>("idle");
   const [status, setStatus] = useState<{ type: string; msg: string } | null>(null);
@@ -135,22 +136,32 @@ export default function App() {
 
   const createBill = async () => {
     if (!desc || !amount || !payers) return;
+    const payerAddrs = payersList.filter(p => p.length > 0);
+    if (payerAddrs.length === 0) return;
+
     setBillTx("pending"); setStatus(null);
     try {
-      const hash = await simSignSend((auth) =>
-        Operation.invokeContractFunction({
+      const hash = await simSignSend((auth) => {
+        const args: xdr.ScVal[] = [
+          xdr.ScVal.scvAddress(appKeypair.publicKey()),
+          xdr.ScVal.scvString(desc),
+          xdr.ScVal.scvI128(BigInt(amount)),
+          xdr.ScVal.scvU32(payerAddrs.length),
+        ];
+
+        const payerScVec = xdr.ScVec.scvVec(
+          payerAddrs.map((addr): xdr.ScVal => xdr.ScVal.scvAddress(addr))
+        );
+        args.push(payerScVec);
+
+        return Operation.invokeContractFunction({
           contract: CORE_ID, function: "create_bill",
-          args: [
-            xdr.ScVal.scvAddress(appKeypair.publicKey()),
-            xdr.ScVal.scvString(desc),
-            xdr.ScVal.scvI128(BigInt(amount)),
-            xdr.ScVal.scvU32(Number(payers)),
-          ],
+          args,
           auth,
-        })
-      );
+        });
+      });
       setStatus({ type: "success", msg: `Bill created! TX: ${hash.slice(0, 12)}…` });
-      setDesc(""); setAmount(""); setPayers("");
+      setDesc(""); setAmount(""); setPayers(""); setPayersList([]);
       setBillTx("success");
       setTimeout(() => setBillTx("idle"), 2000);
     } catch (e: unknown) {
@@ -266,11 +277,31 @@ export default function App() {
 
               <input className="input" placeholder="What's this for? (Pizza, Rent…)" value={desc} onChange={e => setDesc(e.target.value)} />
               <div className="form-row">
-                <input className="input" type="number" placeholder="Total (XLM stroops)" value={amount} onChange={e => setAmount(e.target.value)} />
-                <input className="input" type="number" placeholder="People" value={payers} onChange={e => setPayers(e.target.value)} style={{maxWidth:100}} />
+                <input className="input" type="number" placeholder="Total (stroops)" value={amount} onChange={e => setAmount(e.target.value)} />
+                <input className="input" type="number" placeholder="# Payers" value={payers} onChange={e => {
+                  const n = Number(e.target.value) || 0;
+                  setPayers(e.target.value);
+                  const arr = [...payersList];
+                  while (arr.length < n) arr.push("");
+                  setPayersList(arr.slice(0, n));
+                }} style={{maxWidth:100}} />
               </div>
 
-              <button className="btn btn-yellow btn-full" onClick={createBill} disabled={billTx === "pending" || !desc || !amount || !payers}>
+              {payersList.map((p, i) => (
+                <input
+                  key={i}
+                  className="input"
+                  placeholder={`Payer ${i+1} address (G…)`}
+                  value={p}
+                  onChange={e => {
+                    const arr = [...payersList];
+                    arr[i] = e.target.value;
+                    setPayersList(arr);
+                  }}
+                />
+              ))}
+
+              <button className="btn btn-yellow btn-full" onClick={createBill} disabled={billTx === "pending" || !desc || !amount || payersList.filter(p=>p).length === 0}>
                 {billTx === "pending" ? "CREATING…" : "➕ CREATE BILL"}
               </button>
             </div>

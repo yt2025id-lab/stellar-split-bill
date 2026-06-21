@@ -42,10 +42,10 @@ Result: 10 passed, 0 failed
 - **CI/CD:** GitHub Actions
 - **Deploy:** Vercel (frontend) + Stellar Testnet (contracts)
 
-## Deployed Contracts (Testnet)
+## Deployed Contracts (Testnet) v2
 
-- **Split Token:** `CDOEW4PJG76SBL2OOUYVSB5I4LIOM6TPWQAWY4KXOOHP2LSLOQKPCJIH`
-- **Split Core:** `CBWCNSBR47PAXWU45SNALMEQ4OGWPBVRIK55ZAONSUKSC5AITN7FDRLT`
+- **Split Token:** `CCJ5MEBLFYVFOPN4EDO53IFQOCBWHO7SGIFEWXSKCTNHGTBZ6TTY53X5`
+- **Split Core:** `CCRVTPOVHJZ7KLANM2AEPIQPLSDWIDK2M66GJQHFEHJVJPHGDCKQOGJ3`
 
 ## CI/CD Pipeline
 

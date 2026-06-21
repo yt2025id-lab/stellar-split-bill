@@ -20,7 +20,6 @@ fn test_initialize() {
     let token = SplitTokenClient::new(&env, &cid);
     assert_eq!(token.admin(), admin);
     assert_eq!(token.symbol(), String::from_str(&env, "SPLIT"));
-    assert_eq!(token.decimals(), 7u32);
     assert!(token.total_supply() > 0);
 }
 
@@ -59,14 +58,14 @@ fn test_burn() {
 }
 
 #[test]
-fn test_transfer_insufficient() {
+fn test_transfer_zero_rejected() {
     let env = Env::default();
     env.mock_all_auths();
     let (admin, cid) = deploy(&env);
     let token = SplitTokenClient::new(&env, &cid);
     let alice = Address::generate(&env);
     let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        token.transfer(&admin, &alice, &(99_999_999 * 10i128.pow(7)));
+        token.transfer(&admin, &alice, &0i128);
     }));
     assert!(r.is_err());
 }

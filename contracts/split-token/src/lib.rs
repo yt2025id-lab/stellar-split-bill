@@ -1,5 +1,5 @@
 #![cfg_attr(not(test), no_std)]
-use soroban_sdk::{contract, contractimpl, Env, Address, Symbol, String};
+use soroban_sdk::{contract, contractimpl, Env, Address, Symbol, String, symbol_short};
 
 #[contract]
 pub struct SplitToken;
@@ -15,13 +15,20 @@ impl SplitToken {
         if env.storage().instance().has(&k(&env, "admin")) {
             panic!("Already initialized");
         }
-        let supply = initial_supply * 10i128.pow(DECIMAL);
+        let supply = initial_supply
+            .checked_mul(10i128.pow(DECIMAL))
+            .expect("Supply overflow");
         env.storage().instance().set(&k(&env, "admin"), &admin);
         env.storage().instance().set(&k(&env, "name"), &name);
         env.storage().instance().set(&k(&env, "symbol"), &symbol);
         env.storage().instance().set(&k(&env, "decs"), &DECIMAL);
         env.storage().instance().set(&k(&env, "supply"), &supply);
         env.storage().instance().set(&admin, &supply);
+
+        env.events().publish(
+            (symbol_short!("token"), symbol_short!("init")),
+            (admin, supply),
+        );
     }
 
     pub fn admin(env: Env) -> Address { env.storage().instance().get(&k(&env, "admin")).unwrap() }
@@ -33,30 +40,48 @@ impl SplitToken {
 
     pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
         from.require_auth();
+        if amount <= 0 { panic!("Amount must be positive"); }
         let fb: i128 = env.storage().instance().get(&from).unwrap_or(0);
         let tb: i128 = env.storage().instance().get(&to).unwrap_or(0);
         if fb < amount { panic!("Insufficient balance"); }
         env.storage().instance().set(&from, &(fb - amount));
         env.storage().instance().set(&to, &(tb + amount));
+
+        env.events().publish(
+            (symbol_short!("transfer"),),
+            (from, to, amount),
+        );
     }
 
     pub fn mint(env: Env, admin: Address, to: Address, amount: i128) {
         admin.require_auth();
+        if amount <= 0 { panic!("Amount must be positive"); }
         let stored: Address = env.storage().instance().get(&k(&env, "admin")).unwrap();
         if admin != stored { panic!("Only admin"); }
         let sup: i128 = env.storage().instance().get(&k(&env, "supply")).unwrap();
         let tb: i128 = env.storage().instance().get(&to).unwrap_or(0);
-        env.storage().instance().set(&k(&env, "supply"), &(sup + amount));
-        env.storage().instance().set(&to, &(tb + amount));
+        env.storage().instance().set(&k(&env, "supply"), &(sup.checked_add(amount).expect("Supply overflow")));
+        env.storage().instance().set(&to, &(tb.checked_add(amount).expect("Balance overflow")));
+
+        env.events().publish(
+            (symbol_short!("mint"),),
+            (admin, to, amount),
+        );
     }
 
     pub fn burn(env: Env, from: Address, amount: i128) {
         from.require_auth();
+        if amount <= 0 { panic!("Amount must be positive"); }
         let fb: i128 = env.storage().instance().get(&from).unwrap_or(0);
         let sup: i128 = env.storage().instance().get(&k(&env, "supply")).unwrap();
         if fb < amount { panic!("Insufficient balance"); }
         env.storage().instance().set(&from, &(fb - amount));
         env.storage().instance().set(&k(&env, "supply"), &(sup - amount));
+
+        env.events().publish(
+            (symbol_short!("burn"),),
+            (from, amount),
+        );
     }
 }
 
