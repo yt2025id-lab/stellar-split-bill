@@ -63,7 +63,7 @@ export function SceneHero({ active }: { active: boolean }) {
             <span className="scene-item mt-1 flex items-center gap-3 text-[9vw] sm:text-[3.5rem]" style={{ transitionDelay: "280ms" }}>
               <span>{h.titleLead}</span>
               <span className="inline-block border-[3px] border-[var(--color-text)] bg-[var(--color-text)] px-3 py-0.5 text-[var(--color-stellar)] brutal-shadow">
-                Sui
+                Stellar
               </span>
             </span>
           </h1>
