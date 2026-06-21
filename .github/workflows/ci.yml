@@ -1,0 +1,85 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  contract-tests:
+    name: Smart Contract Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build contracts
+        run: cargo build --release
+      - name: Run contract tests
+        run: cargo test
+
+  frontend-tests:
+    name: Frontend Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+  deploy-contracts:
+    name: Deploy Contracts to Testnet
+    needs: contract-tests
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        target: wasm32-unknown-unknown
+      - name: Install Stellar CLI
+        run: |
+          cargo install --locked stellar-cli --features opt
+      - name: Build contracts
+        run: cargo build --release --target wasm32-unknown-unknown
+      - name: Deploy dao-token
+        run: |
+          stellar contract deploy \
+            --wasm target/wasm32-unknown-unknown/release/dao_token.wasm \
+            --source alice \
+            --network testnet \
+            -- > token-deploy.txt
+      - name: Deploy dao-core
+        run: |
+          stellar contract deploy \
+            --wasm target/wasm32-unknown-unknown/release/dao_core.wasm \
+            --source alice \
+            --network testnet \
+            -- > dao-deploy.txt
+      - name: Upload deployment artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-addresses
+          path: |
+            token-deploy.txt
+            dao-deploy.txt
+
+  deploy-frontend:
+    name: Deploy Frontend to Vercel
+    needs: frontend-tests
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: frontend
