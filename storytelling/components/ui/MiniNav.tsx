@@ -5,7 +5,7 @@ import { LanguageSwitch } from "./LanguageSwitch";
 import { Button } from "./Button";
 import { SplitBillLogo } from "@/components/brand/SplitBillLogo";
 
-export const DAPP_URL = "https://split-bill.vercel.app";
+export const DAPP_URL = "https://split-bill-dapp.vercel.app";
 
 export function MiniNav() {
   const dict = useDict();
