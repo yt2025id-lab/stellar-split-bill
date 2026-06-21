@@ -5,3 +5,7 @@ test_snapshots/
 *.wasm
 .env
 .DS_Store
+
+.env
+frontend/.env
+frontend/dist/
