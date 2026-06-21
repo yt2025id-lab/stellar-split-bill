@@ -2,14 +2,14 @@
 use soroban_sdk::{contract, contractimpl, Env, Address, Symbol, String};
 
 #[contract]
-pub struct DaoToken;
+pub struct SplitToken;
 
 const DECIMAL: u32 = 7;
 
 fn k(env: &Env, s: &str) -> Symbol { Symbol::new(env, s) }
 
 #[contractimpl]
-impl DaoToken {
+impl SplitToken {
     pub fn initialize(env: Env, admin: Address, name: String, symbol: String, initial_supply: i128) {
         admin.require_auth();
         if env.storage().instance().has(&k(&env, "admin")) {
@@ -24,24 +24,12 @@ impl DaoToken {
         env.storage().instance().set(&admin, &supply);
     }
 
-    pub fn admin(env: Env) -> Address {
-        env.storage().instance().get(&k(&env, "admin")).unwrap()
-    }
-    pub fn name(env: Env) -> String {
-        env.storage().instance().get(&k(&env, "name")).unwrap()
-    }
-    pub fn symbol(env: Env) -> String {
-        env.storage().instance().get(&k(&env, "symbol")).unwrap()
-    }
-    pub fn decimals(env: Env) -> u32 {
-        env.storage().instance().get(&k(&env, "decs")).unwrap()
-    }
-    pub fn total_supply(env: Env) -> i128 {
-        env.storage().instance().get(&k(&env, "supply")).unwrap()
-    }
-    pub fn balance(env: Env, owner: Address) -> i128 {
-        env.storage().instance().get(&owner).unwrap_or(0)
-    }
+    pub fn admin(env: Env) -> Address { env.storage().instance().get(&k(&env, "admin")).unwrap() }
+    pub fn name(env: Env) -> String { env.storage().instance().get(&k(&env, "name")).unwrap() }
+    pub fn symbol(env: Env) -> String { env.storage().instance().get(&k(&env, "symbol")).unwrap() }
+    pub fn decimals(env: Env) -> u32 { env.storage().instance().get(&k(&env, "decs")).unwrap() }
+    pub fn total_supply(env: Env) -> i128 { env.storage().instance().get(&k(&env, "supply")).unwrap() }
+    pub fn balance(env: Env, owner: Address) -> i128 { env.storage().instance().get(&owner).unwrap_or(0) }
 
     pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
         from.require_auth();

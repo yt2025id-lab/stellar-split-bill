@@ -8,7 +8,6 @@ import {
   Horizon,
   TransactionBuilder,
   Networks,
-  Contract,
   xdr,
   Keypair,
   Operation,
@@ -17,10 +16,13 @@ import {
 const HORIZON_URL = "https://horizon-testnet.stellar.org";
 const RPC_URL = "https://soroban-testnet.stellar.org";
 
+const TOKEN_ID = "CDOEW4PJG76SBL2OOUYVSB5I4LIOM6TPWQAWY4KXOOHP2LSLOQKPCJIH";
+const CORE_ID = "CBWCNSBR47PAXWU45SNALMEQ4OGWPBVRIK55ZAONSUKSC5AITN7FDRLT";
+
 const server = new Horizon.Server(HORIZON_URL);
 const appKeypair = Keypair.random();
 
-type TxStatus = "idle" | "pending" | "success" | "fail";
+type TxState = "idle" | "pending" | "success" | "fail";
 
 function rpcCall(method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
   return fetch(RPC_URL, {
@@ -28,38 +30,36 @@ function rpcCall(method: string, params: Record<string, unknown>): Promise<Recor
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
   }).then((r) => r.json().then((d) => {
-    if (d.error) throw new Error(`RPC ${method}: ${d.error.message ?? JSON.stringify(d.error)}`);
+    if (d.error) throw new Error(d.error.message ?? JSON.stringify(d.error));
     return d.result as Record<string, unknown>;
   }));
 }
 
-interface Proposal {
+interface Bill {
   id: number;
-  proposer: string;
-  title: string;
-  yes_votes: number;
-  no_votes: number;
-  abtain_votes: number;
-  end_time: number;
-  executed: boolean;
+  creator: string;
+  description: string;
+  total_amount: number;
+  share_per_person: number;
+  payer_count: number;
+  paid_count: number;
+  completed: boolean;
 }
 
-function App() {
+export default function App() {
   const [address, setAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
-  const [fetchingBal, setFetchingBal] = useState(false);
   const [walletName, setWalletName] = useState("");
   const [appFunded, setAppFunded] = useState(false);
+  const [fetching, setFetching] = useState(false);
 
-  const [tokenId, setTokenId] = useState("");
-  const [daoId, setDaoId] = useState("");
-  const [deployTx, setDeployTx] = useState<TxStatus>("idle");
-
-  const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [titleInput, setTitleInput] = useState("");
-  const [propTx, setPropTx] = useState<TxStatus>("idle");
-  const [voteTx, setVoteTx] = useState<TxStatus>("idle");
-  const [error, setError] = useState<string | null>(null);
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [desc, setDesc] = useState("");
+  const [amount, setAmount] = useState("");
+  const [payers, setPayers] = useState("");
+  const [billTx, setBillTx] = useState<TxState>("idle");
+  const [payTx, setPayTx] = useState<TxState>("idle");
+  const [status, setStatus] = useState<{ type: string; msg: string } | null>(null);
 
   useEffect(() => {
     fetch(`https://friendbot.stellar.org?addr=${appKeypair.publicKey()}`)
@@ -70,316 +70,267 @@ function App() {
       });
   }, []);
 
-  const fetchBalance = useCallback(async (addr: string) => {
-    setFetchingBal(true);
+  useEffect(() => {
+    isConnected().then((r) => {
+      if (r.isConnected) getAddress().then(({ address: a }) => {
+        setAddress(a); setWalletName("Freighter");
+        fetchBal(a);
+      });
+    }).catch(() => {});
+  }, []);
+
+  const fetchBal = useCallback(async (addr: string) => {
+    setFetching(true);
     try {
       const acct = await server.loadAccount(addr);
       const xlm = acct.balances.find((b: { asset_type: string }) => b.asset_type === "native");
       setBalance(xlm?.balance ?? "0");
     } catch { setBalance("0"); }
-    finally { setFetchingBal(false); }
+    finally { setFetching(false); }
   }, []);
 
-  const connectWallet = async () => {
-    setError(null);
+  useEffect(() => { if (address) fetchBal(address); }, [address, fetchBal]);
+
+  const connect = async () => {
     const { address: addr, error: e } = await requestAccess();
-    if (e || !addr) { setError("Freighter not found"); return; }
-    setAddress(addr);
-    setWalletName("Freighter");
-    await fetchBalance(addr);
+    if (e || !addr) return setStatus({ type: "error", msg: "Freighter not found" });
+    setAddress(addr); setWalletName("Freighter");
+    await fetchBal(addr);
   };
 
   const disconnect = () => {
     setAddress(null); setBalance(null); setWalletName("");
-    setError(null);
+    setStatus(null);
   };
 
-  const deployContracts = async () => {
-    setDeployTx("pending");
-    setError(null);
+  const fmt = (a: string) => `${a.slice(0, 5)}…${a.slice(-4)}`;
+
+  // Simulate + sign + send helper
+  async function simSignSend(op: (auth?: xdr.SorobanAuthorizationEntry[]) => xdr.Operation): Promise<string> {
+    const acct = await server.loadAccount(appKeypair.publicKey());
+    const raw = new TransactionBuilder(acct, {
+      fee: "100000", networkPassphrase: Networks.TESTNET,
+    }).addOperation(op()).setTimeout(300).build();
+
+    const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as {
+      minResourceFee: string; transactionData: string; result?: { auth?: string[] }; error?: string;
+    };
+    if (sim.error) throw new Error(sim.error);
+
+    const rf = parseInt(sim.minResourceFee || "0", 10) || 0;
+    const fee = (parseInt(raw.fee, 10) + rf).toString();
+    const sd = sim.transactionData ? xdr.SorobanTransactionData.fromXDR(sim.transactionData, "base64") : undefined;
+    const auth: xdr.SorobanAuthorizationEntry[] = [];
+    if (sim.result?.auth) for (const a of sim.result.auth) auth.push(xdr.SorobanAuthorizationEntry.fromXDR(a, "base64"));
+
+    const fresh = await server.loadAccount(appKeypair.publicKey());
+    const tx = new TransactionBuilder(fresh, {
+      fee, networkPassphrase: Networks.TESTNET, sorobanData: sd,
+    }).addOperation(op(auth.length > 0 ? auth : undefined)).setTimeout(300).build();
+
+    tx.sign(appKeypair);
+    const r = await rpcCall("sendTransaction", { transaction: tx.toXDR() }) as unknown as { hash: string };
+    return r.hash;
+  }
+
+  const createBill = async () => {
+    if (!desc || !amount || !payers) return;
+    setBillTx("pending"); setStatus(null);
     try {
-      const acct = await server.loadAccount(appKeypair.publicKey());
-
-      const raw = new TransactionBuilder(acct, {
-        fee: "100000", networkPassphrase: Networks.TESTNET,
-      }).setTimeout(300).build();
-
-      const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as {
-        minResourceFee: string; error?: string;
-      };
-
-      if (sim.error) throw new Error(sim.error);
-
-      const resourceFee = parseInt(sim.minResourceFee || "0", 10) || 0;
-      const totalFee = (parseInt(raw.fee, 10) + resourceFee).toString();
-
-      const finalTx = new TransactionBuilder(acct, {
-        fee: totalFee, networkPassphrase: Networks.TESTNET,
-      }).setTimeout(300).build();
-
-      finalTx.sign(appKeypair);
-
-      const sendResult = await rpcCall("sendTransaction", {
-        transaction: finalTx.toXDR(),
-      }) as unknown as { hash: string; status: string };
-
-      setDeployTx("success");
-      setError(`Contracts deployed! TX: ${sendResult.hash.slice(0, 16)}...`);
-    } catch (e: unknown) {
-      setDeployTx("fail");
-      setError((e as Error).message);
-    }
-  };
-
-  const createProposal = async () => {
-    if (!daoId || !titleInput) return;
-    setPropTx("pending");
-    setError(null);
-    try {
-      const acct = await server.loadAccount(appKeypair.publicKey());
-
-      const raw = new TransactionBuilder(acct, {
-        fee: "100000", networkPassphrase: Networks.TESTNET,
-      })
-        .addOperation(
-          Operation.invokeContractFunction({
-            contract: daoId,
-            function: "create_proposal",
-            args: [
-              xdr.ScVal.scvAddress(appKeypair.publicKey()),
-              xdr.ScVal.scvSymbol(titleInput),
-            ],
-          })
-        )
-        .setTimeout(300).build();
-
-      const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as {
-        minResourceFee: string; transactionData: string;
-        result?: { auth?: string[] }; error?: string;
-      };
-
-      if (sim.error) throw new Error(sim.error);
-
-      const resourceFee = parseInt(sim.minResourceFee || "0", 10) || 0;
-      const totalFee = (parseInt(raw.fee, 10) + resourceFee).toString();
-
-      const simData = sim.transactionData ? xdr.SorobanTransactionData.fromXDR(sim.transactionData, "base64") : undefined;
-      const auth: xdr.SorobanAuthorizationEntry[] = [];
-      if (sim.result?.auth) {
-        for (const a of sim.result.auth) {
-          auth.push(xdr.SorobanAuthorizationEntry.fromXDR(a, "base64"));
-        }
-      }
-
-      const freshAcct = await server.loadAccount(appKeypair.publicKey());
-      const tx = new TransactionBuilder(freshAcct, {
-        fee: totalFee, networkPassphrase: Networks.TESTNET,
-        sorobanData: simData,
-      })
-        .addOperation(
-          Operation.invokeContractFunction({
-            contract: daoId,
-            function: "create_proposal",
-            args: [
-              xdr.ScVal.scvAddress(appKeypair.publicKey()),
-              xdr.ScVal.scvSymbol(titleInput),
-            ],
-            auth: auth.length > 0 ? auth : undefined,
-          })
-        )
-        .setTimeout(300).build();
-
-      tx.sign(appKeypair);
-
-      const sendResult = await rpcCall("sendTransaction", { transaction: tx.toXDR() }) as unknown as { hash: string };
-      setPropTx("success");
-      setTitleInput("");
-      setError(`Proposal created! TX: ${sendResult.hash.slice(0, 16)}...`);
-    } catch (e: unknown) {
-      setPropTx("fail");
-      setError((e as Error).message);
-    }
-  };
-
-  const castVote = async (proposalId: number, support: number) => {
-    if (!daoId) return;
-    setVoteTx("pending");
-    setError(null);
-    try {
-      const acct = await server.loadAccount(appKeypair.publicKey());
-
-      const raw = new TransactionBuilder(acct, {
-        fee: "100000", networkPassphrase: Networks.TESTNET,
-      })
-        .addOperation(
-          Operation.invokeContractFunction({
-            contract: daoId,
-            function: "cast_vote",
-            args: [
-              xdr.ScVal.scvAddress(appKeypair.publicKey()),
-              xdr.ScVal.scvU32(proposalId),
-              xdr.ScVal.scvU32(support),
-            ],
-          })
-        )
-        .setTimeout(300).build();
-
-      const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as {
-        minResourceFee: string; transactionData: string;
-        result?: { auth?: string[] }; error?: string;
-      };
-
-      if (sim.error) throw new Error(sim.error);
-
-      const resourceFee = parseInt(sim.minResourceFee || "0", 10) || 0;
-      const totalFee = (parseInt(raw.fee, 10) + resourceFee).toString();
-      const simData = sim.transactionData ? xdr.SorobanTransactionData.fromXDR(sim.transactionData, "base64") : undefined;
-      const auth: xdr.SorobanAuthorizationEntry[] = [];
-      if (sim.result?.auth) for (const a of sim.result.auth) auth.push(xdr.SorobanAuthorizationEntry.fromXDR(a, "base64"));
-
-      const freshAcct = await server.loadAccount(appKeypair.publicKey());
-      const tx = new TransactionBuilder(freshAcct, {
-        fee: totalFee, networkPassphrase: Networks.TESTNET, sorobanData: simData,
-      })
-        .addOperation(Operation.invokeContractFunction({
-          contract: daoId, function: "cast_vote",
+      const hash = await simSignSend((auth) =>
+        Operation.invokeContractFunction({
+          contract: CORE_ID, function: "create_bill",
           args: [
             xdr.ScVal.scvAddress(appKeypair.publicKey()),
-            xdr.ScVal.scvU32(proposalId),
-            xdr.ScVal.scvU32(support),
+            xdr.ScVal.scvString(desc),
+            xdr.ScVal.scvI128(BigInt(amount)),
+            xdr.ScVal.scvU32(Number(payers)),
           ],
-          auth: auth.length > 0 ? auth : undefined,
-        }))
-        .setTimeout(300).build();
-
-      tx.sign(appKeypair);
-      const sendResult = await rpcCall("sendTransaction", { transaction: tx.toXDR() }) as unknown as { hash: string };
-      setVoteTx("success");
-      setError(`Vote cast! TX: ${sendResult.hash.slice(0, 16)}...`);
+          auth,
+        })
+      );
+      setStatus({ type: "success", msg: `Bill created! TX: ${hash.slice(0, 12)}…` });
+      setDesc(""); setAmount(""); setPayers("");
+      setBillTx("success");
+      setTimeout(() => setBillTx("idle"), 2000);
     } catch (e: unknown) {
-      setVoteTx("fail");
-      setError((e as Error).message);
+      setBillTx("fail");
+      setStatus({ type: "error", msg: (e as Error).message });
     }
   };
 
-  useEffect(() => {
-    if (address) fetchBalance(address);
-  }, [address, fetchBalance]);
+  const markPaid = async (billId: number) => {
+    setPayTx("pending"); setStatus(null);
+    try {
+      const hash = await simSignSend((auth) =>
+        Operation.invokeContractFunction({
+          contract: CORE_ID, function: "mark_paid",
+          args: [
+            xdr.ScVal.scvAddress(appKeypair.publicKey()),
+            xdr.ScVal.scvU32(billId),
+          ],
+          auth,
+        })
+      );
+      setStatus({ type: "success", msg: `Paid! TX: ${hash.slice(0, 12)}…` });
+      setPayTx("success");
+      setTimeout(() => setPayTx("idle"), 2000);
+    } catch (e: unknown) {
+      setPayTx("fail");
+      setStatus({ type: "error", msg: (e as Error).message });
+    }
+  };
 
-  useEffect(() => {
-    isConnected().then((r) => {
-      if (r.isConnected) {
-        getAddress().then(({ address: a }) => {
-          setAddress(a);
-          setWalletName("Freighter");
-          fetchBalance(a);
-        });
+  const loadBills = async () => {
+    try {
+      setPayTx("pending");
+      const acct = await server.loadAccount(appKeypair.publicKey());
+      const raw = new TransactionBuilder(acct, {
+        fee: "100000", networkPassphrase: Networks.TESTNET,
+      }).addOperation(
+        Operation.invokeContractFunction({
+          contract: CORE_ID, function: "get_all_bills", args: [],
+        })
+      ).setTimeout(300).build();
+
+      const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as {
+        error?: string; result?: { retval?: string };
+      };
+
+      if (!sim.error && sim.result?.retval) {
+        const val = xdr.ScVal.fromXDR(sim.result.retval, "base64");
+        const vec = val.vec();
+        if (vec) {
+          const parsed: Bill[] = [];
+          for (const item of vec) {
+            const m = item.map();
+            if (m) {
+              const get = (k: string) => m.find((e: { key: { sym: () => string }; val: { u32: () => number; i128: () => { toBigInt: () => bigint }; str: () => string; bool: () => boolean; address: () => { toString: () => string } } }) => e.key.sym().toString() === k)?.val;
+              parsed.push({
+                id: get("id")?.u32() ?? 0,
+                creator: get("creator")?.address()?.toString() ?? "",
+                description: get("description")?.str()?.toString() ?? "",
+                total_amount: Number(get("total_amount")?.i128()?.toBigInt() ?? 0n),
+                share_per_person: Number(get("share_per_person")?.i128()?.toBigInt() ?? 0n),
+                payer_count: get("payer_count")?.u32() ?? 0,
+                paid_count: get("paid_count")?.u32() ?? 0,
+                completed: get("completed")?.bool() ?? false,
+              });
+            }
+          }
+          setBills(parsed);
+        }
       }
-    }).catch(() => {});
-  }, [fetchBalance]);
-
-  const fmtAddr = (a: string) => `${a.slice(0, 6)}...${a.slice(-4)}`;
+      setPayTx("idle");
+    } catch (e: unknown) {
+      setPayTx("fail");
+      setStatus({ type: "error", msg: (e as Error).message });
+    }
+  };
 
   return (
-    <div className="container">
+    <div className="app">
       <header className="header">
-        <h1>Stellar DAO</h1>
-        <p className="subtitle">Orange Belt &mdash; Stellar Journey to Mastery</p>
+        <div className="brand">
+          <span className="emoji">💸</span>
+          <h1>Split Bill</h1>
+        </div>
+        <p className="subtitle">Stellar Orange Belt</p>
 
         {address ? (
           <div className="wallet-bar">
-            <span className="badge">{walletName}</span>
-            <span className="addr">{fmtAddr(address)}</span>
-            <span className="bal">
-              {fetchingBal ? "loading..." : balance ? `${parseFloat(balance).toLocaleString()} XLM` : "..."}
+            <span className="wallet-badge">{walletName}</span>
+            <span className="wallet-addr">{fmt(address)}</span>
+            <span className="balance">
+              {fetching ? "…" : balance ? `${Number(balance).toFixed(1)} XLM` : "…"}
             </span>
-            <button className="btn btn-outline" onClick={disconnect}>Disconnect</button>
+            <button className="btn btn-xs btn-pink" onClick={disconnect}>X</button>
           </div>
         ) : (
-          <button className="btn btn-primary" onClick={connectWallet}>
-            Connect Freighter
+          <button className="btn btn-primary btn-full" onClick={connect} style={{marginTop:12}}>
+            ⚡ Connect Freighter
           </button>
         )}
       </header>
 
-      {address && (
-        <main>
-          <section className="card">
-            <h2>Deploy Contracts</h2>
-            <p className="desc">Deploy DAO Token + DAO Core to Stellar Testnet</p>
-            {!appFunded ? (
-              <p className="hint">Funding signer account...</p>
-            ) : (
-              <>
-                <input
-                  className="input"
-                  placeholder="Token Contract ID (after deploy)"
-                  value={tokenId}
-                  onChange={(e) => setTokenId(e.target.value)}
-                />
-                <input
-                  className="input"
-                  placeholder="DAO Contract ID (after deploy)"
-                  value={daoId}
-                  onChange={(e) => setDaoId(e.target.value)}
-                />
-                <button className="btn btn-primary btn-full" onClick={deployContracts} disabled={deployTx === "pending"}>
-                  {deployTx === "pending" ? "Deploying..." : "Deploy Hello World"}
-                </button>
-              </>
-            )}
-          </section>
+      <main>
+        {status && (
+          <div className={`status ${status.type}`}>{status.msg}</div>
+        )}
 
-          {daoId && (
-            <>
-              <section className="card">
-                <h2>Create Proposal</h2>
-                <input
-                  className="input"
-                  placeholder="Proposal title"
-                  value={titleInput}
-                  onChange={(e) => setTitleInput(e.target.value)}
-                />
-                <button className="btn btn-primary btn-full" onClick={createProposal} disabled={propTx === "pending" || !titleInput}>
-                  {propTx === "pending" ? "Creating..." : "Create Proposal"}
-                </button>
-              </section>
+        {address && appFunded && (
+          <>
+            <div className="card">
+              <h2 className="card-title">Create Bill</h2>
+              <p className="card-desc">Split expenses with friends. Each pays their share.</p>
 
-              {proposals.length > 0 && (
-                <section className="card">
-                  <h2>Proposals ({proposals.length})</h2>
-                  {proposals.map((p) => (
-                    <div key={p.id} className="proposal">
-                      <strong>#{p.id} {p.title}</strong>
-                      <div className="votes">
-                        <span className="yes">Yes: {p.yes_votes}</span>
-                        <span className="no">No: {p.no_votes}</span>
-                        <span className="abstain">Abstain: {p.abtain_votes}</span>
-                      </div>
-                      <div className="vote-btns">
-                        <button className="btn btn-yes" onClick={() => castVote(p.id, 0)} disabled={voteTx === "pending"}>Yes</button>
-                        <button className="btn btn-no" onClick={() => castVote(p.id, 1)} disabled={voteTx === "pending"}>No</button>
-                      </div>
-                    </div>
-                  ))}
-                </section>
-              )}
-            </>
-          )}
+              <input className="input" placeholder="What's this for? (Pizza, Rent…)" value={desc} onChange={e => setDesc(e.target.value)} />
+              <div className="form-row">
+                <input className="input" type="number" placeholder="Total (XLM stroops)" value={amount} onChange={e => setAmount(e.target.value)} />
+                <input className="input" type="number" placeholder="People" value={payers} onChange={e => setPayers(e.target.value)} style={{maxWidth:100}} />
+              </div>
 
-          {error && (
-            <div className={`status-card ${propTx === "fail" || voteTx === "fail" || deployTx === "fail" ? "error" : "success"}`}>
-              <strong>{error}</strong>
+              <button className="btn btn-yellow btn-full" onClick={createBill} disabled={billTx === "pending" || !desc || !amount || !payers}>
+                {billTx === "pending" ? "CREATING…" : "➕ CREATE BILL"}
+              </button>
             </div>
-          )}
-        </main>
-      )}
+
+            <div className="card">
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <h2 className="card-title" style={{margin:0}}>Active Bills</h2>
+                <button className="btn btn-xs btn-cyan" onClick={loadBills}>REFRESH</button>
+              </div>
+
+              {bills.length === 0 ? (
+                <p style={{fontFamily:"JetBrains Mono, monospace",fontSize:12,color:"#999",textAlign:"center",padding:"24px 0"}}>
+                  No bills yet. Create one!
+                </p>
+              ) : (
+                bills.map((b) => (
+                  <div key={b.id} className="bill">
+                    <div className="bill-header">
+                      <span className="bill-id">#{b.id}</span>
+                      <span className={`bill-status ${b.completed ? "done" : "active"}`}>
+                        {b.completed ? "DONE" : "ACTIVE"}
+                      </span>
+                    </div>
+                    <div className="bill-desc">{b.description}</div>
+                    <div className="bill-meta">
+                      <span>💰 {b.total_amount / 1e7} XLM</span>
+                      <span>👤 {b.share_per_person / 1e7} each</span>
+                      <span>✅ {b.paid_count}/{b.payer_count}</span>
+                    </div>
+                    <div className="progress-bar">
+                      <div className="progress-fill" style={{
+                        width: `${b.payer_count > 0 ? (b.paid_count / b.payer_count) * 100 : 0}%`
+                      }} />
+                    </div>
+                    {!b.completed && (
+                      <button
+                        className="btn btn-lime btn-full btn-sm"
+                        onClick={() => markPaid(b.id)}
+                        disabled={payTx === "pending"}
+                      >
+                        {payTx === "pending" ? "PAYING…" : `💳 MARK AS PAID — ${b.share_per_person / 1e7} XLM`}
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
+
+        {address && !appFunded && (
+          <div className="status pending" style={{textAlign:"center"}}>
+            Funding signer account via Friendbot…
+          </div>
+        )}
+      </main>
 
       <footer className="footer">
-        <p>DAO dApp &bull; Orange Belt &bull; June 2026</p>
+        Split Bill dApp · Neo-Brutalism · June 2026
       </footer>
     </div>
   );
 }
-
-export default App;

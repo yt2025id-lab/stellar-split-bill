@@ -1,7 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-  "contracts/*",
+  "contracts/split-token",
+  "contracts/split-core",
 ]
 
 [workspace.dependencies]
