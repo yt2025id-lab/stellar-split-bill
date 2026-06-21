@@ -7,7 +7,7 @@ interface SectionProps {
   children: ReactNode;
 }
 
-export function Section({ id, kicker, accent = "var(--color-sui)", children }: SectionProps) {
+export function Section({ id, kicker, accent = "var(--color-stellar)", children }: SectionProps) {
   return (
     <section
       id={id}

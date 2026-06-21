@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* ── Light neo-brutalism, matching the bright Suivan dApp + demo video ── */
+/* ── Light neo-brutalism, matching the bright Split Bill dApp + demo video ── */
 @theme {
   --color-base: #faf8f4;     /* bright warm-white background */
   --color-text: #0a0a0a;     /* ink (text + borders + hard shadows) */
@@ -8,7 +8,7 @@
   --color-surface: #ffffff;  /* white card surface */
   --color-ink: #0a0a0a;      /* near-black, for text on bright accents */
 
-  --color-sui: #0c8ce9;      /* primary accent — sky */
+  --color-stellar: #0c8ce9;      /* primary accent — Stellar sky blue */
   --color-teal: #0a9d6e;     /* solution / yield — teal-green */
   --color-amber: #d98200;    /* tradition — amber */
   --color-crack: #e0140a;    /* the trust "crack" — red */
@@ -213,7 +213,7 @@ body {
 .cursor-dot {
   width: 6px;
   height: 6px;
-  background: var(--color-sui);
+  background: var(--color-stellar);
 }
 .cursor-ring {
   width: 30px;

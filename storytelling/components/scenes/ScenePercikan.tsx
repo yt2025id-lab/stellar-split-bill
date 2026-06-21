@@ -48,7 +48,7 @@ export function ScenePercikan({ active }: { active: boolean }) {
           </ScenePanel>
           <div className="scene-item mt-7 flex flex-wrap items-start gap-4" style={{ transitionDelay: "320ms" }}>
             {dict.percikan.points.map((p, i) => {
-              const c = ["var(--color-sui)", "var(--color-teal)", "var(--color-amber)"][i % 3];
+              const c = ["var(--color-stellar)", "var(--color-teal)", "var(--color-amber)"][i % 3];
               const tilt = [-4, 3, -2][i % 3];
               const lift = [22, 0, 12][i % 3];
               return (
@@ -76,7 +76,7 @@ export function ScenePercikan({ active }: { active: boolean }) {
           <Spark className="spark-anim relative w-[clamp(160px,18vw,240px)]" color="var(--color-amber)" />
           <span
             className="float-y absolute right-0 top-3 h-3 w-3 rounded-full border-2 border-[var(--color-text)]"
-            style={{ background: "var(--color-sui)" }}
+            style={{ background: "var(--color-stellar)" }}
             aria-hidden
           />
           <span

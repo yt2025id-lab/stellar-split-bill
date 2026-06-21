@@ -61,7 +61,7 @@ export function SplitCircle(props: SvgProps) {
     return {
       x: Math.round(120 + Math.cos(a) * 92),
       y: Math.round(120 + Math.sin(a) * 92),
-      fill: i % 2 === 0 ? "var(--color-sui)" : "var(--color-teal)",
+      fill: i % 2 === 0 ? "var(--color-stellar)" : "var(--color-teal)",
     };
   });
   return (

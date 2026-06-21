@@ -4,7 +4,7 @@
  * same active neo-brutalist feel as the hero. Purely decorative + non-blocking;
  * the `drift` animation is disabled under reduced motion (see globals.css).
  */
-export function SceneDecor({ accent = "var(--color-sui)" }: { accent?: string }) {
+export function SceneDecor({ accent = "var(--color-stellar)" }: { accent?: string }) {
   return (
     <>
       <div

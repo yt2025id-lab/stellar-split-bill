@@ -55,7 +55,7 @@ export function Marquee({ items }: { items: string[] }) {
   return (
     <div
       className="relative overflow-hidden border-y-[3px] py-3"
-      style={{ background: "var(--color-sui)", borderColor: "var(--color-text)" }}
+      style={{ background: "var(--color-stellar)", borderColor: "var(--color-text)" }}
     >
       <div ref={trackRef} className="flex w-max gap-8 whitespace-nowrap will-change-transform">
         {row.map((item, i) => (

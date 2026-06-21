@@ -58,7 +58,7 @@ export function Preloader() {
       <div className="pre-word font-display mt-5 overflow-hidden text-3xl tracking-[0.3em]">
         <span className="inline-block">Split Protocol</span>
       </div>
-      <div className="pre-line mt-4 h-1 w-40 origin-left scale-x-0 bg-[var(--color-sui)]" />
+      <div className="pre-line mt-4 h-1 w-40 origin-left scale-x-0 bg-[var(--color-stellar)]" />
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { useDict } from "@/lib/i18n/LocaleProvider";
 import { DAPP_URL } from "@/components/ui/MiniNav";
 import { SplitBillLogo } from "@/components/brand/SplitBillLogo";
 
-const DOT = ["var(--color-sui)", "var(--color-amber)", "var(--color-teal)", "var(--color-sui)"];
+const DOT = ["var(--color-stellar)", "var(--color-amber)", "var(--color-teal)", "var(--color-stellar)"];
 
 export function SceneHero({ active }: { active: boolean }) {
   const dict = useDict();
@@ -30,7 +30,7 @@ export function SceneHero({ active }: { active: boolean }) {
       />
 
       {/* Idle-drifting brutalist blocks (always moving + cross-fades with the scene) */}
-      <div className="drift pointer-events-none absolute left-[6%] top-[22%] hidden h-12 w-12 border-[3px] border-[var(--color-sui)] bg-[var(--color-sui)] lg:block" style={{ animationDelay: "0s" }} aria-hidden />
+      <div className="drift pointer-events-none absolute left-[6%] top-[22%] hidden h-12 w-12 border-[3px] border-[var(--color-stellar)] bg-[var(--color-stellar)] lg:block" style={{ animationDelay: "0s" }} aria-hidden />
       <div className="drift pointer-events-none absolute left-[44%] top-[12%] hidden h-8 w-8 rotate-45 border-[3px] border-[var(--color-amber)] bg-[var(--color-amber)] lg:block" style={{ animationDelay: "-3s" }} aria-hidden />
       <div className="drift pointer-events-none absolute bottom-[20%] left-[40%] hidden h-10 w-10 border-[3px] border-[var(--color-teal)] lg:block" style={{ animationDelay: "-6s" }} aria-hidden />
 
@@ -56,19 +56,19 @@ export function SceneHero({ active }: { active: boolean }) {
             </span>
             <span
               className="scene-item block text-[13vw] sm:text-[5.5rem] lg:text-[7.5rem]"
-              style={{ color: "var(--color-sui)", transitionDelay: "200ms" }}
+              style={{ color: "var(--color-stellar)", transitionDelay: "200ms" }}
             >
               {h.titleLine2}
             </span>
             <span className="scene-item mt-1 flex items-center gap-3 text-[9vw] sm:text-[3.5rem]" style={{ transitionDelay: "280ms" }}>
               <span>{h.titleLead}</span>
-              <span className="inline-block border-[3px] border-[var(--color-text)] bg-[var(--color-text)] px-3 py-0.5 text-[var(--color-sui)] brutal-shadow">
+              <span className="inline-block border-[3px] border-[var(--color-text)] bg-[var(--color-text)] px-3 py-0.5 text-[var(--color-stellar)] brutal-shadow">
                 Sui
               </span>
             </span>
           </h1>
 
-          <div className="scene-item mt-6 max-w-md border-l-[5px] border-[var(--color-sui)] pl-4" style={{ transitionDelay: "360ms" }}>
+          <div className="scene-item mt-6 max-w-md border-l-[5px] border-[var(--color-stellar)] pl-4" style={{ transitionDelay: "360ms" }}>
             <p className="text-base text-[var(--color-text)]">{h.lead}</p>
             <p className="mt-1 text-base font-bold text-[var(--color-text)]">{h.leadStrong}</p>
           </div>
@@ -100,7 +100,7 @@ export function SceneHero({ active }: { active: boolean }) {
             className="scene-item relative border-[4px] border-[var(--color-text)] bg-[var(--color-surface)] p-5 brutal-shadow"
             style={{ transitionDelay: "240ms" }}
           >
-            <span className="absolute -top-3 right-5 border-[3px] border-[var(--color-text)] bg-[var(--color-sui)] px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.18em] text-[var(--color-ink)]">
+            <span className="absolute -top-3 right-5 border-[3px] border-[var(--color-text)] bg-[var(--color-stellar)] px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.18em] text-[var(--color-ink)]">
               {h.builtOn}
             </span>
             <p className="mb-3 text-center text-[10px] font-black uppercase tracking-[0.28em] text-[var(--color-muted)]">
@@ -112,7 +112,7 @@ export function SceneHero({ active }: { active: boolean }) {
               <svg className="spin-slow absolute inset-0 h-full w-full" viewBox="0 0 100 100" aria-hidden>
                 <circle cx="50" cy="50" r="47" fill="none" stroke="var(--color-text)" strokeWidth="1.5" strokeDasharray="6 5" />
               </svg>
-              <div className="flex aspect-square w-[88%] items-center justify-center rounded-full border-[4px] border-[var(--color-text)] bg-[var(--color-sui)]">
+              <div className="flex aspect-square w-[88%] items-center justify-center rounded-full border-[4px] border-[var(--color-text)] bg-[var(--color-stellar)]">
                 <span className="grid h-[80%] w-[80%] place-items-center rounded-full bg-[var(--color-surface)]">
                   <SplitBillLogo size={170} className="h-[88%] w-[88%]" />
                 </span>
@@ -127,7 +127,7 @@ export function SceneHero({ active }: { active: boolean }) {
           <div className="scene-item grid grid-cols-2 gap-3" style={{ transitionDelay: "360ms" }}>
             <div className="border-[3px] border-[var(--color-text)] bg-[var(--color-surface)] p-3 brutal-shadow">
               <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--color-muted)]">{h.stats[0].label}</p>
-              <p className="font-display text-2xl" style={{ color: "var(--color-sui)" }}>{h.stats[0].value}</p>
+              <p className="font-display text-2xl" style={{ color: "var(--color-stellar)" }}>{h.stats[0].value}</p>
             </div>
             <div className="border-[3px] border-[var(--color-text)] bg-[var(--color-surface)] p-3 brutal-shadow">
               <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--color-muted)]">{h.stats[1].label}</p>
@@ -138,7 +138,7 @@ export function SceneHero({ active }: { active: boolean }) {
           <div className="scene-item border-[3px] border-[var(--color-text)] bg-[var(--color-text)] p-3 brutal-shadow" style={{ transitionDelay: "440ms" }}>
             <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--color-muted)]">{h.stats[2].label}</p>
             <p className="text-sm font-black uppercase tracking-wide text-[var(--color-surface)]">
-              <span style={{ color: "var(--color-sui)" }}>100%</span> {h.stats[2].value.replace("100% ", "")}
+              <span style={{ color: "var(--color-stellar)" }}>100%</span> {h.stats[2].value.replace("100% ", "")}
             </p>
           </div>
         </div>

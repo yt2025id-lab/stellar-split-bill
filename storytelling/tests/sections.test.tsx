@@ -15,11 +15,11 @@ function withLocale(ui: React.ReactNode) {
 }
 
 describe("SceneHero", () => {
-  it("renders the Trustless ROSCA headline and a primary link to the dApp", () => {
+  it("renders the Split Bill headline and a primary link to the dApp", () => {
     withLocale(<SceneHero active />);
-    expect(screen.getByText("ROSCA")).toBeInTheDocument();
+    expect(screen.getByText("Bills")).toBeInTheDocument();
     expect(screen.getByText("Trustless")).toBeInTheDocument();
-    const cta = screen.getByRole("link", { name: /join arisan now/i });
+    const cta = screen.getByRole("link", { name: /buka dapp/i });
     expect(cta).toHaveAttribute("href", "https://suivan.vercel.app");
   });
 });

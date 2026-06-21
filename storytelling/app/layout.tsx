@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Split Bill: Decentralized Expense Sharing on Stellar",
     description:
-      "Arisan, the centuries-old savings circle, brought on-chain on Sui.",
+      "Split any bill with friends. Settle on-chain with Stellar Soroban.",
     images: ["/og-image.png"],
     type: "website",
   },

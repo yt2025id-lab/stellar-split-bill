@@ -20,7 +20,7 @@ export function Sistem() {
 
   return (
     <section id="sistem" className="relative overflow-hidden">
-      <SceneDecor accent="var(--color-sui)" />
+      <SceneDecor accent="var(--color-stellar)" />
       <span
         className="font-display pointer-events-none absolute -right-10 top-10 select-none text-[24vw] leading-none"
         style={{ color: "transparent", WebkitTextStroke: "2px rgba(12,140,233,0.14)" }}
@@ -40,7 +40,7 @@ export function Sistem() {
         >
           <SpotSistem />
         </ReactiveArt>
-        <ScenePanel accent="var(--color-sui)" className="mx-auto max-w-2xl text-center" style={revealItem(p1, 0.02, 0.18, 0, 36)}>
+        <ScenePanel accent="var(--color-stellar)" className="mx-auto max-w-2xl text-center" style={revealItem(p1, 0.02, 0.18, 0, 36)}>
           <p
             className="brutal-badge mb-4 inline-block px-3 py-1.5 text-xs"
             style={{ background: "var(--color-amber)", color: "var(--color-ink)", ...revealItem(p1, 0, 0.12, 0, 16) }}
@@ -58,7 +58,7 @@ export function Sistem() {
         {/* Brutalist scroll-driven stepper (square blocks, not a ring) */}
         <div className="my-8 w-full max-w-md" style={revealItem(p1, 0.1, 0.24, 0, 0)}>
           <div className="border-[4px] border-[var(--color-text)] bg-[var(--color-surface)] px-6 py-7 text-center brutal-shadow">
-            <span className="tabular font-num text-6xl font-bold leading-none" style={{ color: "var(--color-sui)" }}>
+            <span className="tabular font-num text-6xl font-bold leading-none" style={{ color: "var(--color-stellar)" }}>
               {steps[active].day}
             </span>
             <span className="mt-2 block text-sm uppercase tracking-wider text-[var(--color-muted)]">
@@ -70,7 +70,7 @@ export function Sistem() {
               <div
                 key={s.day}
                 className="h-4 flex-1 border-[3px] border-[var(--color-text)]"
-                style={{ background: i <= active ? "var(--color-sui)" : "var(--color-surface)" }}
+                style={{ background: i <= active ? "var(--color-stellar)" : "var(--color-surface)" }}
                 aria-hidden
               />
             ))}
@@ -87,7 +87,7 @@ export function Sistem() {
               data-testid="timeline-step"
               className="rounded-full border px-4 py-2 text-sm font-semibold transition-all duration-300"
               style={{
-                borderColor: i === active ? "var(--color-sui)" : "rgba(10,10,10,0.2)",
+                borderColor: i === active ? "var(--color-stellar)" : "rgba(10,10,10,0.2)",
                 color: i === active ? "var(--color-text)" : "var(--color-muted)",
                 opacity: i <= active ? 1 : 0.5,
               }}
@@ -120,7 +120,7 @@ export function Sistem() {
                   className="brutal-card flex gap-4 p-5 text-sm leading-relaxed"
                   style={revealItem(p2, a, a + 0.2, i % 2 === 0 ? -40 : 40, 30)}
                 >
-                  <span className="tabular font-num text-xl font-bold" style={{ color: "var(--color-sui)" }}>
+                  <span className="tabular font-num text-xl font-bold" style={{ color: "var(--color-stellar)" }}>
                     {String(i + 1).padStart(2, "0")}
                   </span>
                   <span className="text-[var(--color-muted)]">{rule}</span>

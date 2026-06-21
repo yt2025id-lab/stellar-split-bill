@@ -6,7 +6,7 @@ import type { CSSProperties, ReactNode } from "react";
  * content in this so every scene reads as the same bold neo-brutalist concept.
  */
 export function ScenePanel({
-  accent = "var(--color-sui)",
+  accent = "var(--color-stellar)",
   className = "",
   style,
   children,

@@ -8,11 +8,11 @@ import { SceneDecor } from "@/components/ui/SceneDecor";
 import { ScenePanel } from "@/components/ui/ScenePanel";
 
 const ACCENTS = [
-  "var(--color-sui)",
+  "var(--color-stellar)",
   "var(--color-teal)",
   "var(--color-amber)",
   "var(--color-crack)",
-  "var(--color-sui)",
+  "var(--color-stellar)",
 ];
 
 export function Galeri() {
@@ -21,7 +21,7 @@ export function Galeri() {
 
   return (
     <section ref={sectionRef} id="galeri" className="relative overflow-hidden md:h-screen">
-      <SceneDecor accent="var(--color-sui)" />
+      <SceneDecor accent="var(--color-stellar)" />
       <GhostWord
         text="STACK"
         stroke="rgba(12,140,233,0.12)"
@@ -29,7 +29,7 @@ export function Galeri() {
       />
       <div className="relative z-10 flex flex-col justify-center py-24 md:h-screen md:py-0">
         <div className="mb-10 px-6">
-          <ScenePanel accent="var(--color-sui)" className="max-w-2xl">
+          <ScenePanel accent="var(--color-stellar)" className="max-w-2xl">
             <p
               className="brutal-badge mb-4 inline-block px-3 py-1.5 text-xs"
               style={{ background: "var(--color-amber)", color: "var(--color-ink)" }}

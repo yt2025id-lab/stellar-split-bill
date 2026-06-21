@@ -11,7 +11,7 @@ import { revealItem } from "@/lib/reveal";
 
 const ACCENTS = [
   "var(--color-teal)",
-  "var(--color-sui)",
+  "var(--color-stellar)",
   "var(--color-amber)",
   "var(--color-crack)",
 ];

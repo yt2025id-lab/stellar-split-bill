@@ -76,7 +76,7 @@ export function Cta() {
               <SplitBillLogo size={36} className="h-9 w-9" />
               <div>
                 <span className="font-display block text-xl text-[var(--color-surface)]">Split Bill</span>
-                <span className="font-display block text-[10px] uppercase tracking-[0.18em] text-[var(--color-sui)]">{f.tagline}</span>
+                <span className="font-display block text-[10px] uppercase tracking-[0.18em] text-[var(--color-stellar)]">{f.tagline}</span>
               </div>
             </div>
             <p className="max-w-xs text-sm font-medium leading-7 text-[#a8a49a]">{f.blurb}</p>
@@ -89,7 +89,7 @@ export function Cta() {
                   rel="noopener noreferrer"
                   aria-label={label}
                   data-cursor
-                  className="grid size-9 place-items-center border-[3px] border-[#a8a49a] text-[#a8a49a] transition hover:border-[var(--color-sui)] hover:bg-[var(--color-sui)] hover:text-[var(--color-text)]"
+                  className="grid size-9 place-items-center border-[3px] border-[#a8a49a] text-[#a8a49a] transition hover:border-[var(--color-stellar)] hover:bg-[var(--color-stellar)] hover:text-[var(--color-text)]"
                 >
                   <Icon className="size-4" />
                 </a>
@@ -99,10 +99,10 @@ export function Cta() {
 
           {/* Product */}
           <div>
-            <h4 className="font-num mb-4 text-[10px] font-black uppercase tracking-[0.18em] text-[var(--color-sui)]">{f.productTitle}</h4>
+            <h4 className="font-num mb-4 text-[10px] font-black uppercase tracking-[0.18em] text-[var(--color-stellar)]">{f.productTitle}</h4>
             <div className="flex flex-col gap-2.5">
               {f.product.map((label) => (
-                <a key={label} href="#" data-cursor className="text-sm font-semibold text-[#a8a49a] transition hover:text-[var(--color-sui)]">
+                <a key={label} href="#" data-cursor className="text-sm font-semibold text-[#a8a49a] transition hover:text-[var(--color-stellar)]">
                   {label}
                 </a>
               ))}
@@ -111,15 +111,15 @@ export function Cta() {
 
           {/* Ecosystem + explorer */}
           <div>
-            <h4 className="font-num mb-4 text-[10px] font-black uppercase tracking-[0.18em] text-[var(--color-sui)]">{f.ecosystemTitle}</h4>
+            <h4 className="font-num mb-4 text-[10px] font-black uppercase tracking-[0.18em] text-[var(--color-stellar)]">{f.ecosystemTitle}</h4>
             <div className="flex flex-col gap-2.5">
               {ECOSYSTEM.map(({ label, href }) => (
-                <a key={label} href={href} target="_blank" rel="noopener noreferrer" data-cursor className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#a8a49a] transition hover:text-[var(--color-sui)]">
+                <a key={label} href={href} target="_blank" rel="noopener noreferrer" data-cursor className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#a8a49a] transition hover:text-[var(--color-stellar)]">
                   {label}
                   <ArrowUpRight className="size-3" />
                 </a>
               ))}
-              <a href={EXPLORER_URL} target="_blank" rel="noopener noreferrer" data-cursor className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#a8a49a] transition hover:text-[var(--color-sui)]">
+              <a href={EXPLORER_URL} target="_blank" rel="noopener noreferrer" data-cursor className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#a8a49a] transition hover:text-[var(--color-stellar)]">
                 {dict.cta.explorer}
                 <ArrowUpRight className="size-3" />
               </a>
@@ -129,7 +129,7 @@ export function Cta() {
 
         <div className="mt-9 flex flex-col gap-3 border-t-[3px] border-[#a8a49a] pt-5 text-xs font-medium text-[#a8a49a] md:flex-row md:items-center md:justify-between">
           <span>{f.rights}</span>
-          <a href="https://stellar.org" target="_blank" rel="noopener noreferrer" data-cursor className="font-display inline-flex items-center gap-1.5 text-sm text-[var(--color-sui)] transition hover:text-[var(--color-surface)]">
+          <a href="https://stellar.org" target="_blank" rel="noopener noreferrer" data-cursor className="font-display inline-flex items-center gap-1.5 text-sm text-[var(--color-stellar)] transition hover:text-[var(--color-surface)]">
             {f.event}
             <ArrowUpRight className="size-3.5" />
           </a>
