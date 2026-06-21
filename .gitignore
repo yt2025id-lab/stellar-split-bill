@@ -9,3 +9,5 @@ test_snapshots/
 .env
 frontend/.env
 frontend/dist/
+storytelling/node_modules/
+storytelling/.next/
