@@ -28,7 +28,7 @@ Split Bill is a **decentralized expense-sharing protocol** built on Stellar Soro
 ```
 ┌─────────────────────────────────────────────────────┐
 │                    Frontend (React)                   │
-│         Neo-Brutalist • Mobile-First • Vite          │
+│          Web3 Dark Theme • Mobile-First • Vite         │
 └──────────────┬────────────────────┬──────────────────┘
                │                    │
           Freighter              Raw RPC
@@ -97,17 +97,27 @@ split-token (5 tests)          split-core (7 tests)
 | `split-token` | [`CCJ5ME…53X5`](https://stellar.expert/explorer/testnet/contract/CCJ5MEBLFYVFOPN4EDO53IFQOCBWHO7SGIFEWXSKCTNHGTBZ6TTY53X5) | Testnet |
 | `split-core` | [`CCRVT…OGJ3`](https://stellar.expert/explorer/testnet/contract/CCRVTPOVHJZ7KLANM2AEPIQPLSDWIDK2M66GJQHFEHJVJPHGDCKQOGJ3) | Testnet |
 
+### Verified Contract Interactions
+
+| Action | TX Hash | Explorer |
+|--------|---------|----------|
+| `create_bill` | `4d85b4…` | [View](https://stellar.expert/explorer/testnet/tx/4d85b4b39d1cd1ca26607085eb799a2628387778523b36fb4379ed7eb40e0605) |
+| `mark_paid` (inter-contract burn) | `746eb4…` | [View](https://stellar.expert/explorer/testnet/tx/746eb4f75c44cd97877d3bb10f7f2b727c66220c82a3c8c473d0645075587292) |
+| `mint` (token to payer) | `53d19b…` | [View](https://stellar.expert/explorer/testnet/tx/53d19b24ea8778712fe570b2a9cf335c72fbf77a47353b5eaa9afce70a87c78b) |
+
+The `mark_paid` transaction emits events from **both contracts** — `burn` from `split-token` and `bill.paid` from `split-core` — demonstrating inter-contract communication.
+
 ---
 
-## 🎨 Neo-Brutalist Design
+## 🎨 Professional Web3 Design
 
 ```
-Bold borders  •  Hard shadows  •  Raw typography
-Space Grotesk  •  JetBrains Mono  •  Inter
-#FFD700 Yellow  •  #39FF14 Lime  •  #FF6B9D Pink
+Orange dark theme  •  3D animated sphere  •  Grid background
+Inter  •  JetBrains Mono  •  Geometric sans-serif
+#FF7A00 Orange  •  #0A0A0A Dark  •  #FFD700 Gold accent
 ```
 
-Fully mobile-responsive with `viewport-fit=cover` for iOS safe areas.
+Fully mobile-responsive with `viewport-fit=cover` for iOS safe areas and 480px breakpoint.
 
 ---
 
@@ -121,7 +131,7 @@ Fully mobile-responsive with `viewport-fit=cover` for iOS safe areas.
 | RPC | Raw `fetch` JSON-RPC (no SDK bloat) |
 | CI/CD | GitHub Actions |
 | Hosting | Vercel |
-| Styling | Neo-Brutalism CSS |
+| Styling | Web3 Dark CSS |
 
 ---
 
@@ -164,7 +174,7 @@ stellar-split-bill/
 ├── frontend/
 │   └── src/
 │       ├── App.tsx          # Main dApp
-│       ├── index.css        # Neo-brutalist styles
+│       ├── index.css        # Web3 dark styles
 │       └── main.tsx         # Entry point
 ├── .github/workflows/
 │   └── ci.yml               # CI/CD pipeline

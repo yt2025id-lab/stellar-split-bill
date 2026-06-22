@@ -47,27 +47,27 @@ jobs:
           cargo install --locked stellar-cli --features opt
       - name: Build contracts
         run: cargo build --release --target wasm32-unknown-unknown
-      - name: Deploy dao-token
+      - name: Deploy split-token
         run: |
           stellar contract deploy \
-            --wasm target/wasm32-unknown-unknown/release/dao_token.wasm \
+            --wasm target/wasm32-unknown-unknown/release/split_token.wasm \
             --source alice \
             --network testnet \
             -- > token-deploy.txt
-      - name: Deploy dao-core
+      - name: Deploy split-core
         run: |
           stellar contract deploy \
-            --wasm target/wasm32-unknown-unknown/release/dao_core.wasm \
+            --wasm target/wasm32-unknown-unknown/release/split_core.wasm \
             --source alice \
             --network testnet \
-            -- > dao-deploy.txt
+            -- > core-deploy.txt
       - name: Upload deployment artifacts
         uses: actions/upload-artifact@v4
         with:
           name: deploy-addresses
           path: |
             token-deploy.txt
-            dao-deploy.txt
+            core-deploy.txt
 
   deploy-frontend:
     name: Deploy Frontend to Vercel

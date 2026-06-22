@@ -1,5 +1,5 @@
 #![cfg_attr(not(test), no_std)]
-use soroban_sdk::{contract, contractimpl, contracttype, Env, Address, Symbol, Vec, String, Map, symbol_short};
+use soroban_sdk::{contract, contractimpl, contracttype, Env, Address, Symbol, Vec, String, symbol_short};
 
 #[contracttype]
 #[derive(Clone)]

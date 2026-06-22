@@ -20,7 +20,7 @@ export const id: Dict = {
       { value: "Nol", label: "Sengketa" },
       { value: "100% On-chain · Transparan", label: "Keamanan" },
     ],
-    ticker: ["Split tagihan terdesentralisasi", "Tanpa matematika canggung", "Tanpa perlu percaya", "Sepenuhnya teraudit"],
+    ticker: ["Split tagihan terdesentralisasi", "Tanpa matematika canggung", "Tanpa perlu percaya", "Sepenuhnya teraudit", "Inter-contract magic", "Settlement instan", "Tanpa bendahara", "Fully auditable"],
     scrollCue: "Scroll",
   },
   akar: {

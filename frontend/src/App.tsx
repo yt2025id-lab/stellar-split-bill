@@ -252,10 +252,27 @@ export default function App() {
     setPayTx("pending");
     setStatus(null);
     try {
-      const { retval } = await simSignSend("get_all_bills", []);
-      if (retval) {
+      await ensureFunded();
+      const acct = await server.loadAccount(appKeypair.publicKey());
+      const raw = new TransactionBuilder(acct, {
+        fee: "1000",
+        networkPassphrase: Networks.TESTNET,
+      })
+        .addOperation(Operation.invokeContractFunction({ contract: CORE_ID, function: "get_all_bills", args: [] }))
+        .setTimeout(300)
+        .build();
+
+      const simResult = (await rpcCall("simulateTransaction", { transaction: raw.toXDR() })) as unknown as {
+        result?: { retval?: string };
+        error?: string;
+      };
+
+      if (simResult.error) throw new Error(`Simulation failed: ${simResult.error}`);
+
+      if (simResult.result?.retval) {
+        const retval = xdr.ScVal.fromXDR(simResult.result.retval, "base64");
         const vec = retval.vec();
-        if (vec) {
+        if (vec && vec.length > 0) {
           const parsed: Bill[] = [];
           for (let i = 0; i < vec.length; i++) {
             try { parsed.push(decodeBill(vec[i])); } catch {}
@@ -493,32 +510,15 @@ export default function App() {
             <p className="section-sub">Connect your Freighter wallet to start splitting bills on Stellar Soroban</p>
           </div>
 
-          <div className="honeycomb-loader" style={{margin: "0 auto 16px", display: "block"}}>
-            <div /><div /><div /><div /><div /><div /><div />
-          </div>
-
-          {status && (
-            <div className={`status-bar ${status.type}`}>
-              <span className="status-indicator" />
-              <span>{status.msg}</span>
-              {status.txHash && (
-                <a
-                  href={`${EXPLORER_BASE}/tx/${status.txHash}`}
-                  target="_blank"
-                  rel="noopener"
-                  className="status-tx-link"
-                >
-                  View TX &nearr;
-                </a>
-              )}
-            </div>
-          )}
-
           {!address ? (
-            <div className="connect-prompt">
-              <p className="connect-text">Connect your Freighter wallet to get started</p>
-              <button onClick={connect} className="btn btn-primary btn-lg">Connect Freighter</button>
-            </div>
+            <>
+              <div className="honeycomb-loader" style={{margin: "0 auto 24px", display: "block"}}>
+                <div /><div /><div /><div /><div /><div /><div />
+              </div>
+              <div className="connect-prompt" style={{padding: "0 24px 48px"}}>
+                <button onClick={connect} className="btn btn-primary btn-lg">Connect Freighter</button>
+              </div>
+            </>
           ) : !appFunded ? (
             <div className="connect-prompt">
               <div className="spinner" />
@@ -527,21 +527,6 @@ export default function App() {
             </div>
           ) : (
             <>
-              <div className="dapp-info-bar">
-                <span className="dapp-info-label">Signer Address (full):</span>
-                <code className="dapp-info-addr">{appKeypair.publicKey()}</code>
-                <button
-                  className="btn btn-ghost btn-xs"
-                  onClick={() => {
-                    navigator.clipboard.writeText(appKeypair.publicKey());
-                    setStatus({ type: "success", msg: "Signer address copied!" });
-                    setTimeout(() => setStatus(null), 2000);
-                  }}
-                >
-                  Copy
-                </button>
-              </div>
-
               {/* Create Bill Form */}
               <div className="dapp-card">
                 <h3 className="dapp-card-title">Create New Bill</h3>
@@ -617,6 +602,40 @@ export default function App() {
                 ))}
               </div>
             </>
+          )}
+
+          {status && (
+            <div className={`status-bar ${status.type}`} style={{marginTop: 20}}>
+              <span className="status-indicator" />
+              <span>{status.msg}</span>
+              {status.txHash && (
+                <a
+                  href={`${EXPLORER_BASE}/tx/${status.txHash}`}
+                  target="_blank"
+                  rel="noopener"
+                  className="status-tx-link"
+                >
+                  View TX &nearr;
+                </a>
+              )}
+            </div>
+          )}
+
+          {address && appFunded && (
+            <div className="dapp-info-bar" style={{marginTop: 16}}>
+              <span className="dapp-info-label">Signer Address (full):</span>
+              <code className="dapp-info-addr">{appKeypair.publicKey()}</code>
+              <button
+                className="btn btn-ghost btn-xs"
+                onClick={() => {
+                  navigator.clipboard.writeText(appKeypair.publicKey());
+                  setStatus({ type: "success", msg: "Signer address copied!" });
+                  setTimeout(() => setStatus(null), 2000);
+                }}
+              >
+                Copy
+              </button>
+            </div>
           )}
         </div>
       </section>

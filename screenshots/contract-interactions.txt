@@ -1,0 +1,14 @@
+Contract Interaction TX Hashes (Testnet)
+=========================================
+
+create_bill:
+  TX: 4d85b4b39d1cd1ca26607085eb799a2628387778523b36fb4379ed7eb40e0605
+  Explorer: https://stellar.expert/explorer/testnet/tx/4d85b4b39d1cd1ca26607085eb799a2628387778523b36fb4379ed7eb40e0605
+
+mark_paid (inter-contract burn):
+  TX: 746eb4f75c44cd97877d3bb10f7f2b727c66220c82a3c8c473d0645075587292
+  Explorer: https://stellar.expert/explorer/testnet/tx/746eb4f75c44cd97877d3bb10f7f2b727c66220c82a3c8c473d0645075587292
+
+mint:
+  TX: 53d19b24ea8778712fe570b2a9cf335c72fbf77a47353b5eaa9afce70a87c78b
+  Explorer: https://stellar.expert/explorer/testnet/tx/53d19b24ea8778712fe570b2a9cf335c72fbf77a47353b5eaa9afce70a87c78b

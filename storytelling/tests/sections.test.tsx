@@ -18,8 +18,8 @@ describe("SceneHero", () => {
   it("renders the Split Bill headline and a primary link to the dApp", () => {
     withLocale(<SceneHero active />);
     expect(screen.getByText("Bills")).toBeInTheDocument();
-    expect(screen.getByText("Trustless")).toBeInTheDocument();
-    const cta = screen.getByRole("link", { name: /buka dapp/i });
+    expect(screen.getByText("Stellar")).toBeInTheDocument();
+    const cta = screen.getByRole("link", { name: /Launch dApp|Buka dApp/i });
     expect(cta).toHaveAttribute("href", "https://split-bill-dapp.vercel.app");
   });
 });
@@ -27,12 +27,13 @@ describe("SceneHero", () => {
 describe("text sections", () => {
   it("Akar renders its title and stat", () => {
     withLocale(<Akar />);
-    expect(screen.getByText(/rotating savings/i)).toBeInTheDocument();
-    expect(screen.getByText("100M+")).toBeInTheDocument();
+    expect(screen.getByText(/splitting bills/i)).toBeInTheDocument();
+    const statElements = screen.getAllByText(/Billions|Miliaran/i);
+    expect(statElements.length).toBeGreaterThanOrEqual(1);
   });
   it("Percikan renders its title", () => {
     withLocale(<Percikan />);
-    expect(screen.getByText(/brought it on-chain/i)).toBeInTheDocument();
+    expect(screen.getByText(/bills settled/i)).toBeInTheDocument();
   });
   it("Retakan renders its title", () => {
     withLocale(<Retakan />);
@@ -41,34 +42,34 @@ describe("text sections", () => {
 });
 
 describe("Tempaan", () => {
-  it("renders the 125% formula", () => {
+  it("renders the obligation token formula", () => {
     withLocale(<Tempaan />);
-    expect(screen.getByText(/125% × members × contribution per period/i)).toBeInTheDocument();
+    expect(screen.getByText(/Share\s*=\s*Total/i)).toBeInTheDocument();
   });
 });
 
 describe("Nyala", () => {
-  it("renders both yield streams merging into double yield", () => {
+  it("renders inter-contract communication labels", () => {
     withLocale(<Nyala />);
-    expect(screen.getByText("Collateral")).toBeInTheDocument();
-    expect(screen.getByText("Monthly dues")).toBeInTheDocument();
-    expect(screen.getByText("Double yield")).toBeInTheDocument();
+    expect(screen.getByText("Split Core")).toBeInTheDocument();
+    expect(screen.getByText("Split Token")).toBeInTheDocument();
+    expect(screen.getByText("Inter-Contract")).toBeInTheDocument();
   });
 });
 
 describe("Sistem", () => {
-  it("renders all 9 rules and the 3 timeline steps", () => {
+  it("renders all rules and timeline steps", () => {
     withLocale(<Sistem />);
     expect(screen.getAllByTestId("rule")).toHaveLength(9);
     expect(screen.getAllByTestId("timeline-step")).toHaveLength(3);
-    expect(screen.getByText("Draw winner")).toBeInTheDocument();
+    expect(screen.getByText(/create bill|buat tagihan/i)).toBeInTheDocument();
   });
 });
 
 describe("Cta", () => {
   it("links the primary button to the dApp", () => {
     withLocale(<Cta />);
-    const launch = screen.getByRole("link", { name: /launch the app/i });
+    const launch = screen.getByRole("link", { name: /launch the app|buka aplikasi/i });
     expect(launch).toHaveAttribute("href", "https://split-bill-dapp.vercel.app");
   });
 });

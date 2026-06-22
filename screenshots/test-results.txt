@@ -1,0 +1,22 @@
+
+running 7 tests
+test test::test_unauthorized_payer_rejected ... ok
+test test::test_uneven_split_rejected ... ok
+test test::test_initialize ... ok
+test test::test_mark_paid_and_complete ... ok
+test test::test_inter_contract_burn ... ok
+test test::test_create_bill ... ok
+test test::test_double_payment_rejected ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+
+running 5 tests
+test test::test_burn ... ok
+test test::test_transfer ... ok
+test test::test_mint ... ok
+test test::test_transfer_zero_rejected ... ok
+test test::test_initialize ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
