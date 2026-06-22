@@ -1,35 +1,181 @@
 import { useState, useEffect, useCallback } from "react";
 import { isConnected, getAddress, requestAccess } from "@stellar/freighter-api";
-import { Horizon, TransactionBuilder, Networks, xdr, Keypair, Operation } from "stellar-sdk";
+import { Horizon, TransactionBuilder, Networks, xdr, Keypair, Operation, Address } from "stellar-sdk";
+import StellarSplitBillLogo from "./StellarSplitBillLogo";
 
 const HORIZON_URL = import.meta.env.VITE_HORIZON_URL || "https://horizon-testnet.stellar.org";
 const RPC_URL = import.meta.env.VITE_RPC_URL || "https://soroban-testnet.stellar.org";
 const TOKEN_ID = import.meta.env.VITE_TOKEN_CONTRACT || "CCJ5MEBLFYVFOPN4EDO53IFQOCBWHO7SGIFEWXSKCTNHGTBZ6TTY53X5";
 const CORE_ID = import.meta.env.VITE_CORE_CONTRACT || "CCRVTPOVHJZ7KLANM2AEPIQPLSDWIDK2M66GJQHFEHJVJPHGDCKQOGJ3";
 
+const EXPLORER_BASE = "https://stellar.expert/explorer/testnet";
+
 const server = new Horizon.Server(HORIZON_URL);
-const appKeypair = Keypair.random();
+
+const STORAGE_KEY = "sb_app_sk";
+
+function getOrCreateKeypair(): Keypair {
+  const stored = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
+  if (stored) {
+    try { return Keypair.fromSecret(stored); } catch { /* corrupted, regenerate */ }
+  }
+  const kp = Keypair.random();
+  if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, kp.secret());
+  return kp;
+}
+
+const appKeypair = getOrCreateKeypair();
+
+function scvAddress(addr: string): xdr.ScVal {
+  return new Address(addr).toScVal();
+}
+
+function scvString(s: string): xdr.ScVal {
+  return xdr.ScVal.scvString(s);
+}
+
+function scvI128(n: bigint): xdr.ScVal {
+  return xdr.ScVal.scvI128(n);
+}
+
+function scvU32(n: number): xdr.ScVal {
+  return xdr.ScVal.scvU32(n);
+}
+
+function scvVec(items: xdr.ScVal[]): xdr.ScVal {
+  return xdr.ScVal.scvVec(items);
+}
 
 type TxState = "idle" | "pending" | "success" | "fail";
 
-function rpcCall(method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
-  return fetch(RPC_URL, {
-    method: "POST", headers: { "Content-Type": "application/json" },
+async function rpcCall(method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const r = await fetch(RPC_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-  }).then((r) => r.json().then((d) => {
-    if (d.error) throw new Error(d.error.message ?? JSON.stringify(d.error));
-    return d.result as Record<string, unknown>;
-  }));
+  });
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message ?? JSON.stringify(d.error));
+  return d.result as Record<string, unknown>;
 }
 
-interface Bill { id: number; creator: string; description: string; total_amount: number; share_per_person: number; payer_count: number; paid_count: number; completed: boolean; }
+interface Bill {
+  id: number;
+  creator: string;
+  description: string;
+  total_amount: number;
+  share_per_person: number;
+  payer_count: number;
+  paid_count: number;
+  completed: boolean;
+}
+
+function decodeBill(scv: xdr.ScVal): Bill {
+  const fields = scv.vec()!;
+  return {
+    id: Number(fields[0].u32()),
+    creator: fields[1].address()?.toString() ?? "",
+    description: fields[2].str()?.toString() ?? "",
+    total_amount: Number(fields[3].i128()?.lo ?? 0n),
+    share_per_person: Number(fields[4].i128()?.lo ?? 0n),
+    payer_count: Number(fields[5].u32()),
+    paid_count: Number(fields[6].u32()),
+    completed: fields[7].bool() ?? false,
+  };
+}
+
+async function ensureFunded(): Promise<void> {
+  try {
+    await server.loadAccount(appKeypair.publicKey());
+    console.log("[SplitBill] Signer already funded:", appKeypair.publicKey());
+    return;
+  } catch {}
+  console.log("[SplitBill] Funding signer via Friendbot:", appKeypair.publicKey());
+  try {
+    await fetch(`https://friendbot.stellar.org?addr=${appKeypair.publicKey()}`);
+    await new Promise((r) => setTimeout(r, 2000));
+    await server.loadAccount(appKeypair.publicKey());
+  } catch (e) {
+    throw new Error(`Failed to fund signer account. Try again later.\n\nSigner: ${appKeypair.publicKey().slice(0, 10)}…`);
+  }
+}
+
+async function simSignSend(
+  func: string,
+  args: xdr.ScVal[],
+  onTxHash?: (hash: string) => void,
+): Promise<{ hash: string; retval?: xdr.ScVal }> {
+  console.log("[SplitBill] simSignSend:", func);
+  await ensureFunded();
+
+  const acct = await server.loadAccount(appKeypair.publicKey());
+  const raw = new TransactionBuilder(acct, {
+    fee: "100000",
+    networkPassphrase: Networks.TESTNET,
+  })
+    .addOperation(Operation.invokeContractFunction({ contract: CORE_ID, function: func, args }))
+    .setTimeout(300)
+    .build();
+
+  const simResult = (await rpcCall("simulateTransaction", { transaction: raw.toXDR() })) as unknown as {
+    minResourceFee: string;
+    transactionData: string;
+    result?: { auth?: string[]; retval?: string };
+    error?: string;
+  };
+
+  if (simResult.error) throw new Error(`Simulation failed: ${simResult.error}`);
+
+  const resourceFee = parseInt(simResult.minResourceFee || "0", 10) || 0;
+  const totalFee = (parseInt(raw.fee, 10) + resourceFee).toString();
+
+  const sorobanData = simResult.transactionData
+    ? xdr.SorobanTransactionData.fromXDR(simResult.transactionData, "base64")
+    : undefined;
+
+  const auth: xdr.SorobanAuthorizationEntry[] = [];
+  if (simResult.result?.auth) {
+    for (const a of simResult.result.auth) {
+      auth.push(xdr.SorobanAuthorizationEntry.fromXDR(a, "base64"));
+    }
+  }
+
+  const fresh = await server.loadAccount(appKeypair.publicKey());
+  const tx = new TransactionBuilder(fresh, {
+    fee: totalFee,
+    networkPassphrase: Networks.TESTNET,
+    sorobanData,
+  })
+    .addOperation(Operation.invokeContractFunction({ contract: CORE_ID, function: func, args, auth: auth.length > 0 ? auth : undefined }))
+    .setTimeout(300)
+    .build();
+
+  tx.sign(appKeypair);
+
+  const sendResult = (await rpcCall("sendTransaction", { transaction: tx.toXDR() })) as unknown as {
+    hash: string;
+    status?: string;
+    errorResult?: string;
+  };
+
+  if (sendResult.errorResult) throw new Error(`Transaction failed: ${sendResult.errorResult}`);
+
+  onTxHash?.(sendResult.hash);
+
+  let retval: xdr.ScVal | undefined;
+  if (simResult.result?.retval) {
+    try { retval = xdr.ScVal.fromXDR(simResult.result.retval, "base64"); } catch {}
+  }
+
+  return { hash: sendResult.hash, retval };
+}
 
 export default function App() {
   const [address, setAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
-  const [walletName, setWalletName] = useState("");
-  const [appFunded, setAppFunded] = useState(false);
+  const [walletName] = useState("");
   const [fetching, setFetching] = useState(false);
+  const [appFunded, setAppFunded] = useState(false);
 
   const [bills, setBills] = useState<Bill[]>([]);
   const [desc, setDesc] = useState("");
@@ -38,229 +184,433 @@ export default function App() {
   const [payersList, setPayersList] = useState<string[]>([]);
   const [billTx, setBillTx] = useState<TxState>("idle");
   const [payTx, setPayTx] = useState<TxState>("idle");
-  const [status, setStatus] = useState<{ type: string; msg: string } | null>(null);
+  const [status, setStatus] = useState<{ type: string; msg: string; txHash?: string } | null>(null);
 
   useEffect(() => {
-    fetch(`https://friendbot.stellar.org?addr=${appKeypair.publicKey()}`)
+    ensureFunded()
       .then(() => setAppFunded(true))
-      .catch(() => { server.loadAccount(appKeypair.publicKey()).then(() => setAppFunded(true)).catch(() => {}); });
+      .catch(() => setAppFunded(false));
   }, []);
 
   useEffect(() => {
-    isConnected().then((r) => { if (r.isConnected) getAddress().then(({ address: a }) => { setAddress(a); setWalletName("Freighter"); fetchBal(a); }); }).catch(() => {});
+    isConnected()
+      .then((r) => {
+        if (r.isConnected) {
+          getAddress().then(({ address: a }) => {
+            setAddress(a);
+            fetchBal(a);
+          });
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const fetchBal = useCallback(async (addr: string) => {
     setFetching(true);
-    try { const acct = await server.loadAccount(addr); setBalance(acct.balances.find((b:{asset_type:string})=>b.asset_type==="native")?.balance??"0"); }
-    catch { setBalance("0"); }
-    finally { setFetching(false); }
+    try {
+      const acct = await server.loadAccount(addr);
+      setBalance(
+        acct.balances.find((b: { asset_type: string }) => b.asset_type === "native")?.balance ?? "0",
+      );
+    } catch {
+      setBalance("0");
+    } finally {
+      setFetching(false);
+    }
   }, []);
-  useEffect(() => { if (address) fetchBal(address); }, [address, fetchBal]);
+
+  useEffect(() => {
+    if (address) fetchBal(address);
+  }, [address, fetchBal]);
 
   const connect = async () => {
-    const { address: addr, error: e } = await requestAccess();
-    if (e || !addr) return setStatus({ type: "error", msg: "Freighter not found" });
-    setAddress(addr); setWalletName("Freighter"); await fetchBal(addr);
+    try {
+      const connected = await isConnected();
+      if (!connected.isConnected) {
+        return setStatus({ type: "error", msg: "Freighter is not connected to this site. Please open Freighter extension and enable Testnet connection." });
+      }
+      const { address: addr, error: e } = await requestAccess();
+      if (e) return setStatus({ type: "error", msg: `Freighter error: ${e}` });
+      if (!addr) return setStatus({ type: "error", msg: "Freighter returned no address. Check if wallet is unlocked." });
+      setAddress(addr);
+      await fetchBal(addr);
+      setStatus({ type: "success", msg: `Connected: ${addr.slice(0, 6)}…${addr.slice(-4)}` });
+      setTimeout(() => setStatus(null), 3000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setStatus({ type: "error", msg: `Cannot connect: ${msg}` });
+    }
   };
 
-  const disconnect = () => { setAddress(null); setBalance(null); setWalletName(""); setStatus(null); };
-
-  async function simSignSend(op: (auth?: xdr.SorobanAuthorizationEntry[]) => xdr.Operation): Promise<string> {
-    const acct = await server.loadAccount(appKeypair.publicKey());
-    const raw = new TransactionBuilder(acct, { fee: "100000", networkPassphrase: Networks.TESTNET }).addOperation(op()).setTimeout(300).build();
-    const sim = await rpcCall("simulateTransaction",{transaction:raw.toXDR()}) as unknown as {minResourceFee:string;transactionData:string;result?:{auth?:string[]};error?:string};
-    if (sim.error) throw new Error(sim.error);
-    const rf=parseInt(sim.minResourceFee||"0",10)||0; const fee=(parseInt(raw.fee,10)+rf).toString();
-    const sd=sim.transactionData?xdr.SorobanTransactionData.fromXDR(sim.transactionData,"base64"):undefined;
-    const auth:xdr.SorobanAuthorizationEntry[]=[]; if(sim.result?.auth)for(const a of sim.result.auth)auth.push(xdr.SorobanAuthorizationEntry.fromXDR(a,"base64"));
-    const fresh=await server.loadAccount(appKeypair.publicKey());
-    const tx=new TransactionBuilder(fresh,{fee,networkPassphrase:Networks.TESTNET,sorobanData:sd}).addOperation(op(auth.length>0?auth:undefined)).setTimeout(300).build();
-    tx.sign(appKeypair);
-    return ((await rpcCall("sendTransaction",{transaction:tx.toXDR()})) as unknown as {hash:string}).hash;
-  }
-
-  const createBill = async () => {
-    const pa = payersList.filter(p=>p.length>0); if(!desc||!amount||pa.length===0)return;
-    setBillTx("pending"); setStatus(null);
-    try {
-      const args: xdr.ScVal[] = [xdr.ScVal.scvAddress(appKeypair.publicKey()),xdr.ScVal.scvString(desc),xdr.ScVal.scvI128(BigInt(amount)),xdr.ScVal.scvU32(pa.length)];
-      args.push(xdr.ScVal.scvVec(pa.map((a):xdr.ScVal=>xdr.ScVal.scvAddress(a))));
-      const hash=await simSignSend((auth)=>Operation.invokeContractFunction({contract:CORE_ID,function:"create_bill",args,auth}));
-      setStatus({type:"success",msg:`Bill created! TX: ${hash.slice(0,12)}…`}); setDesc("");setAmount("");setPayers("");setPayersList([]);
-      setBillTx("success"); setTimeout(()=>setBillTx("idle"),2000);
-    }catch(e:unknown){setBillTx("fail");setStatus({type:"error",msg:(e as Error).message});}
-  };
-
-  const markPaid = async (billId: number) => {
-    setPayTx("pending"); setStatus(null);
-    try {
-      const hash=await simSignSend((auth)=>Operation.invokeContractFunction({contract:CORE_ID,function:"mark_paid",args:[xdr.ScVal.scvAddress(appKeypair.publicKey()),xdr.ScVal.scvU32(billId)],auth}));
-      setStatus({type:"success",msg:`Paid! TX: ${hash.slice(0,12)}…`}); setPayTx("success"); setTimeout(()=>setPayTx("idle"),2000);
-    }catch(e:unknown){setPayTx("fail");setStatus({type:"error",msg:(e as Error).message});}
+  const disconnect = () => {
+    setAddress(null);
+    setBalance(null);
+    setStatus(null);
   };
 
   const loadBills = async () => {
-    try{setPayTx("pending");const h=await simSignSend(()=>Operation.invokeContractFunction({contract:CORE_ID,function:"get_all_bills",args:[]}));setStatus({type:"success",msg:`Refreshed — TX: ${h.slice(0,12)}…`});setPayTx("idle");}catch(e:unknown){setPayTx("fail");setStatus({type:"error",msg:(e as Error).message});}
+    setPayTx("pending");
+    setStatus(null);
+    try {
+      const { retval } = await simSignSend("get_all_bills", []);
+      if (retval) {
+        const vec = retval.vec();
+        if (vec) {
+          const parsed: Bill[] = [];
+          for (let i = 0; i < vec.length; i++) {
+            try { parsed.push(decodeBill(vec[i])); } catch {}
+          }
+          setBills(parsed);
+          setStatus({ type: "success", msg: `Loaded ${parsed.length} bill${parsed.length !== 1 ? "s" : ""}` });
+        } else {
+          setBills([]);
+          setStatus({ type: "success", msg: "No bills yet" });
+        }
+      } else {
+        setBills([]);
+        setStatus({ type: "success", msg: "No bills found (empty state)" });
+      }
+      setPayTx("idle");
+    } catch (e: unknown) {
+      setPayTx("fail");
+      setStatus({ type: "error", msg: (e as Error).message });
+    }
   };
 
-  const fmt = (a: string) => `${a.slice(0, 5)}…${a.slice(-4)}`;
+  const createBill = async () => {
+    const pa = payersList.filter((p) => p.length > 0);
+    if (!desc || !amount || pa.length === 0) return;
+
+    setBillTx("pending");
+    setStatus(null);
+
+    try {
+      console.log("[SplitBill] Creating bill:", { desc, amount, payers: pa.length, addrs: pa });
+
+      const amountNum = BigInt(amount);
+      if (amountNum <= 0) throw new Error("Amount must be positive");
+
+      if (amountNum % BigInt(pa.length) !== 0n) {
+        const per = Number(amountNum) / pa.length;
+        throw new Error(`Amount must be evenly divisible by ${pa.length} payers. Each share would be ${per} stroops — try a round number like ${pa.length * Math.ceil(per)} stroops.`);
+      }
+
+      if (pa.length !== Number(payers)) {
+        throw new Error(`Expected ${payers} payer addresses, but only ${pa.length} filled in. Please complete all payer fields.`);
+      }
+
+      const invalidAddr = pa.find((addr) => !addr.startsWith("G") || addr.length !== 56);
+      if (invalidAddr) {
+        throw new Error(`Invalid Stellar address: "${invalidAddr.slice(0, 12)}…". Must be 56 characters starting with 'G'.`);
+      }
+
+      const args: xdr.ScVal[] = [
+        scvAddress(appKeypair.publicKey()),
+        xdr.ScVal.scvString(desc),
+        xdr.ScVal.scvI128(amountNum),
+        xdr.ScVal.scvU32(pa.length),
+      ];
+      args.push(xdr.ScVal.scvVec(pa.map((a): xdr.ScVal => scvAddress(a))));
+
+      const { hash } = await simSignSend("create_bill", args);
+
+      setStatus({
+        type: "success",
+        msg: `Bill created! `,
+        txHash: hash,
+      });
+      setDesc("");
+      setAmount("");
+      setPayers("");
+      setPayersList([]);
+      setBillTx("success");
+      setTimeout(() => setBillTx("idle"), 2000);
+      loadBills();
+    } catch (e: unknown) {
+      setBillTx("fail");
+      const msg = e instanceof Error ? e.message : String(e);
+      setStatus({ type: "error", msg });
+      setTimeout(() => setBillTx("idle"), 2000);
+    }
+  };
+
+  const markPaid = async (billId: number) => {
+    setPayTx("pending");
+    setStatus(null);
+    try {
+      const { hash } = await simSignSend("mark_paid", [
+        scvAddress(appKeypair.publicKey()),
+        xdr.ScVal.scvU32(billId),
+      ]);
+
+      setStatus({
+        type: "success",
+        msg: `Payment marked! `,
+        txHash: hash,
+      });
+      setPayTx("success");
+      setTimeout(() => setPayTx("idle"), 2000);
+      loadBills();
+    } catch (e: unknown) {
+      setPayTx("fail");
+      setStatus({ type: "error", msg: (e as Error).message });
+    }
+  };
+
+  const fmt = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
   return (
-    <div className="bg-paper text-inherit font-sans overflow-x-hidden min-h-screen" style={{background:"var(--paper)", color:"var(--ink)"}}>
-      {/* ═══════ NAV ═══════ */}
-      <nav className="navbar" style={{background:"rgba(251,247,237,0.9)"}}>
-        <div className="navbar-inner">
-          <span className="font-display text-2xl tracking-tight">💸 SPLIT BILL</span>
-          <div className="flex items-center gap-3">
+    <div className="app-root">
+      {/* ═══════════ NAV ═══════════ */}
+      <nav className="nav">
+        <div className="nav-inner">
+          <div className="nav-actions">
             {address ? (
               <>
-                <span className="hidden sm:inline font-mono text-xs px-3 py-1.5 border-3 bg-lime font-bold">{fmt(address)}</span>
-                <span className="font-mono text-xs font-bold px-3 py-1.5 border-3 bg-yellow">{fetching?"…":balance?Number(balance).toFixed(1)+" XLM":"…"}</span>
-                <button onClick={disconnect} className="brutal-btn px-4 py-1.5 text-xs bg-white hover:bg-pink hover:text-white font-display">DISCONNECT</button>
+                <div className="nav-pill nav-pill-address">
+                  <div className="nav-dot" />
+                  {fmt(address)}
+                </div>
+                <div className="nav-pill nav-pill-balance">
+                  {fetching ? "…" : balance ? Number(balance).toFixed(1) + " XLM" : "…"}
+                </div>
+                <button onClick={disconnect} className="btn btn-sm btn-outline">Disconnect</button>
               </>
             ) : (
-              <button onClick={connect} className="brutal-btn px-6 py-2 text-sm bg-yellow font-display tracking-wider">
-                CONNECT WALLET
-              </button>
+              <a href="#dapp" className="btn btn-primary btn-sm">Launch dApp</a>
             )}
+          </div>
+          <div className="nav-brand">
+            <StellarSplitBillLogo size={34} logoSize={92} />
           </div>
         </div>
       </nav>
 
-      {/* ═══════ HERO ═══════ */}
+      {/* ═══════════ HERO ═══════════ */}
       <section className="hero">
-        <div className="animate-fade-up stagger-1">
-          <span className="inline-block font-mono text-xs font-bold uppercase tracking-wider px-4 py-1.5 border-3 bg-yellow shadow-brutal-sm mb-6">🟠 Orange Belt · Stellar Journey to Mastery</span>
+        <div className="hero-badge">
+          <span className="hero-badge-dot" />
+          Stellar Orange Belt · Journey to Mastery
         </div>
-        <h1 className="animate-fade-up stagger-2 font-display text-6xl md:text-8xl leading-tight uppercase tracking-tighter mb-6">
-          <span className="gradient-text">Split any bill.</span><br/>
-          <span>Zero drama.</span>
+        <div className="sphere-container">
+          <div className="sphere-loader">
+            {Array.from({ length: 8 }, (_, si) => (
+              <div key={si} className={`sphere s${si}`} style={{ '--rot': si } as React.CSSProperties}>
+                {Array.from({ length: 8 }, (_, ii) => (
+                  <div key={ii} className="item" style={{ '--rot-y': ii } as React.CSSProperties} />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+        <h1 className="hero-title">
+          Decentralized<br />
+          <span className="hero-title-accent">Bill Splitting</span>
         </h1>
-        <p className="animate-fade-up stagger-3 max-w-2xl mx-auto font-mono text-sm md:text-base text-muted leading-relaxed mb-10">
-          A decentralized expense-sharing protocol on Stellar Soroban. Create a bill, invite friends with their wallet addresses, and track payments in real-time via smart contracts.
+        <p className="hero-desc">
+          A trustless expense-sharing protocol on Stellar Soroban. Create a bill, invite friends
+          with their wallet addresses, and track payments in real time — settled on-chain.
         </p>
-        <div className="animate-fade-up stagger-4 flex flex-wrap justify-center gap-4">
-          <a href="#dapp" className="brutal-btn inline-block px-10 py-4 text-lg bg-ink text-yellow font-display tracking-wider">LAUNCH DAPP ↓</a>
-          <a href="https://github.com/yt2025id-lab/stellar-split-bill" target="_blank" rel="noopener" className="brutal-btn inline-block px-10 py-4 text-lg bg-white font-display tracking-wider">GITHUB ↗</a>
-        </div>
+        <div className="hero-glow" />
       </section>
 
-      {/* ═══════ FEATURES ═══════ */}
-      <section className="features-section section">
+      {/* ═══════════ FEATURES ═══════════ */}
+      <section className="section" style={{background: "var(--surface-elevated)"}}>
         <div className="container">
-          <div className="text-center mb-16">
-            <span className="font-mono text-xs font-bold uppercase tracking-wider text-muted">Why Split Bill</span>
-            <h2 className="font-display text-4xl md:text-5xl uppercase mb-2 mt-3">Built Different</h2>
+          <div className="section-header">
+            <span className="eyebrow">Why Split Bill</span>
+            <h2 className="section-title">Built for trustless coordination</h2>
           </div>
           <div className="features-grid">
             {[
-              { icon: "🔒", title: "On-Chain Settlement", desc: "Every payment tracked immutably on Stellar Soroban. No disputes, no 'I already paid' arguments." },
-              { icon: "⚡", title: "Inter-Contract Magic", desc: "Split Core calls Split Token to burn obligation tokens automatically. True composability." },
-              { icon: "🎯", title: "Even Splits, Always", desc: "Smart contract enforces exact division. No remainder, no rounding errors, no awkward math." },
+              { icon: "■■■", title: "On-Chain Settlement", desc: "Every payment tracked immutably on Stellar Soroban. No disputes, no 'I already paid' arguments — just cryptographic certainty." },
+              { icon: "◇◇◇", title: "Inter-Contract Composition", desc: "Split Core calls Split Token to burn obligation tokens automatically. True composability between Soroban contracts." },
+              { icon: "●●●", title: "Exact Splits, Always", desc: "The smart contract enforces exact even division with no remainders. No rounding errors, no awkward math, no drama." },
             ].map((f,i) => (
-              <div key={i} className="brutal-card p-8 flex flex-col items-start gap-4">
-                <span className="text-4xl">{f.icon}</span>
-                <h3 className="font-display text-xl uppercase">{f.title}</h3>
-                <p className="font-mono text-xs leading-relaxed text-muted">{f.desc}</p>
+              <div key={i} className="feature-card">
+                <div className="feature-icon">{f.icon}</div>
+                <h3 className="feature-title">{f.title}</h3>
+                <p className="feature-desc">{f.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ═══════ HOW IT WORKS ═══════ */}
+      {/* ═══════════ HOW IT WORKS ═══════════ */}
       <section className="section">
         <div className="container">
-          <div className="text-center mb-16">
-            <span className="font-mono text-xs font-bold uppercase tracking-wider text-muted">Simple Process</span>
-            <h2 className="font-display text-4xl md:text-5xl uppercase mb-2 mt-3">How It Works</h2>
+          <div className="section-header">
+            <span className="eyebrow">Process</span>
+            <h2 className="section-title">How it works</h2>
           </div>
-          <div className="steps-grid">
+          <div className="steps-track">
             {[
-              { step: "01", title: "Create Bill", desc: "Enter the expense, total amount, and your friends' Stellar addresses." },
-              { step: "02", title: "Mint Tokens", desc: "Each payer gets obligation tokens equal to their share of the bill." },
-              { step: "03", title: "Mark Paid", desc: "Pay your share. The contract burns your tokens — proof you've settled." },
-              { step: "04", title: "Auto Complete", desc: "When everyone pays, the bill auto-completes. No chasing required." },
+              { step: "01", title: "Create Bill", desc: "Enter the expense name, total amount, and your friends' Stellar wallet addresses." },
+              { step: "02", title: "Mint Obligation Tokens", desc: "Each payer receives obligation tokens equal to their share. Recorded on-chain, immutable." },
+              { step: "03", title: "Mark Paid", desc: "Pay your share. The contract burns your tokens — cryptographic proof that you've settled." },
+              { step: "04", title: "Auto-Complete", desc: "When everyone has paid, the bill auto-closes. No chasing, no reminders, no friction." },
             ].map((s,i) => (
-              <div key={i} className="brutal-card relative p-6 pt-12">
-                <span className="absolute -top-3 -right-3 w-10 h-10 flex items-center justify-center font-display text-lg bg-yellow border-3 shadow-brutal-sm">{s.step}</span>
-                <h3 className="font-display text-lg uppercase mb-2">{s.title}</h3>
-                <p className="font-mono text-xs leading-relaxed text-muted">{s.desc}</p>
+              <div key={i} className="step-card">
+                <span className="step-number">{s.step}</span>
+                <div className="step-connector" />
+                <h3 className="step-title">{s.title}</h3>
+                <p className="step-desc">{s.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ═══════ DAPP ═══════ */}
-      <section id="dapp" className="dapp-section section">
+      {/* ═══════════ CONTRACT INFO ═══════════ */}
+      <section className="section" style={{background: "var(--surface-elevated)"}}>
+        <div className="container">
+          <div className="section-header">
+            <span className="eyebrow">Deployed Contracts</span>
+            <h2 className="section-title">Stellar Soroban Testnet</h2>
+          </div>
+          <div className="contract-grid">
+            <div className="contract-card">
+              <span className="contract-label">Split Token</span>
+              <code className="contract-id">{TOKEN_ID}</code>
+              <a href={`${EXPLORER_BASE}/contract/${TOKEN_ID}`} target="_blank" rel="noopener" className="contract-link">View on Explorer &nearr;</a>
+            </div>
+            <div className="contract-card">
+              <span className="contract-label">Split Core</span>
+              <code className="contract-id">{CORE_ID}</code>
+              <a href={`${EXPLORER_BASE}/contract/${CORE_ID}`} target="_blank" rel="noopener" className="contract-link">View on Explorer &nearr;</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════ DAPP ═══════════ */}
+      <section id="dapp" className="section dapp-section">
         <div className="container-sm">
-          <div className="text-center mb-12">
-            <span className="font-mono text-xs font-bold uppercase tracking-wider" style={{color:"var(--yellow)"}}>Try It Now</span>
-            <h2 className="font-display text-4xl md:text-5xl uppercase mb-2 mt-3">Launch dApp</h2>
-            <p className="font-mono text-xs text-muted mt-3">Connect Freighter wallet to start splitting bills</p>
+          <div className="section-header">
+            <span className="eyebrow eyebrow-light">Try It Now</span>
+            <h2 className="section-title" style={{color:"var(--text-primary)"}}>Launch dApp</h2>
+            <p className="section-sub">Connect your Freighter wallet to start splitting bills on Stellar Soroban</p>
+          </div>
+
+          <div className="honeycomb-loader" style={{margin: "0 auto 16px", display: "block"}}>
+            <div /><div /><div /><div /><div /><div /><div />
           </div>
 
           {status && (
-            <div className={`status-bar ${status.type==="success"?"status-success":status.type==="error"?"status-error":"status-pending"}`}>
-              {status.msg}
+            <div className={`status-bar ${status.type}`}>
+              <span className="status-indicator" />
+              <span>{status.msg}</span>
+              {status.txHash && (
+                <a
+                  href={`${EXPLORER_BASE}/tx/${status.txHash}`}
+                  target="_blank"
+                  rel="noopener"
+                  className="status-tx-link"
+                >
+                  View TX &nearr;
+                </a>
+              )}
             </div>
           )}
 
           {!address ? (
-            <div className="text-center py-16">
-              <span className="text-6xl block mb-6">🔌</span>
-              <p className="font-mono text-sm text-muted mb-6">Connect your Freighter wallet to get started</p>
-              <button onClick={connect} className="brutal-btn px-10 py-4 text-lg bg-yellow font-display tracking-wider" style={{borderColor:"var(--yellow)"}}>CONNECT FREIGHTER</button>
+            <div className="connect-prompt">
+              <p className="connect-text">Connect your Freighter wallet to get started</p>
+              <button onClick={connect} className="btn btn-primary btn-lg">Connect Freighter</button>
             </div>
           ) : !appFunded ? (
-            <div className="text-center py-16">
-              <span className="text-6xl block mb-6 animate-float">⏳</span>
-              <p className="font-mono text-sm text-muted">Funding signer account via Friendbot…</p>
+            <div className="connect-prompt">
+              <div className="spinner" />
+              <p className="connect-text">Funding signer account via Friendbot…</p>
+              <p className="status-note">Signer: {fmt(appKeypair.publicKey())}</p>
             </div>
           ) : (
             <>
-              <div className="brutal-card bg-white p-6 mb-8" style={{color:"var(--ink)"}}>
-                <h3 className="font-display text-xl uppercase mb-4">Create New Bill</h3>
-                <input className="brutal-input mb-3" placeholder="What's this for? (Pizza Party, Rent…)" value={desc} onChange={e=>setDesc(e.target.value)} />
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <input className="brutal-input" type="number" placeholder="Total (stroops)" value={amount} onChange={e=>setAmount(e.target.value)} />
-                  <input className="brutal-input" type="number" placeholder="# Payers" value={payers} onChange={e=>{const n=Number(e.target.value)||0;setPayers(e.target.value);const a=[...payersList];while(a.length<n)a.push("");setPayersList(a.slice(0,n));}} />
-                </div>
-                {payersList.map((p,i)=>(
-                  <input key={i} className="brutal-input mb-2" placeholder={`Payer ${i+1} Stellar address (G…)`} value={p} onChange={e=>{const a=[...payersList];a[i]=e.target.value;setPayersList(a);}} style={{fontSize:"0.7rem"}} />
-                ))}
-                <button onClick={createBill} disabled={billTx==="pending"||!desc||!amount||payersList.filter(p=>p).length===0} className="brutal-btn w-full py-4 text-base bg-yellow font-display tracking-wider mt-2">
-                  {billTx==="pending"?"CREATING…":"➕ CREATE BILL"}
+              <div className="dapp-info-bar">
+                <span className="dapp-info-label">Signer Address (full):</span>
+                <code className="dapp-info-addr">{appKeypair.publicKey()}</code>
+                <button
+                  className="btn btn-ghost btn-xs"
+                  onClick={() => {
+                    navigator.clipboard.writeText(appKeypair.publicKey());
+                    setStatus({ type: "success", msg: "Signer address copied!" });
+                    setTimeout(() => setStatus(null), 2000);
+                  }}
+                >
+                  Copy
                 </button>
               </div>
 
-              <div className="brutal-card bg-white p-6" style={{color:"var(--ink)"}}>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-display text-xl uppercase">Active Bills</h3>
-                  <button onClick={loadBills} className="brutal-btn px-4 py-1.5 text-xs bg-cyan font-display tracking-wider">REFRESH</button>
+              {/* Create Bill Form */}
+              <div className="dapp-card">
+                <h3 className="dapp-card-title">Create New Bill</h3>
+                <div className="form-group">
+                  <input className="input" placeholder="What's this for? (e.g. Pizza Party, Rent…)" value={desc} onChange={e=>setDesc(e.target.value)} />
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <input className="input" type="number" placeholder="Total (stroops)" value={amount} onChange={e=>setAmount(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <input className="input" type="number" placeholder="Number of payers" value={payers} onChange={e=>{const n=Number(e.target.value)||0;setPayers(e.target.value);const a=[...payersList];while(a.length<n)a.push("");setPayersList(a.slice(0,n));}} />
+                  </div>
+                </div>
+                {amount && payers && Number(payers) > 0 && BigInt(amount) > 0 && BigInt(amount) % BigInt(Number(payers)) !== 0n && (
+                  <div className="form-hint">
+                    ⚠ Amount {amount} stroops is not evenly divisible by {Number(payers)} payers. 
+                    Try {Number(payers) * Math.ceil(Number(amount) / Number(payers))} stroops instead.
+                  </div>
+                )}
+                {payersList.map((p,i)=>(
+                  <div className="form-group" key={i}>
+                    <input
+                      className="input input-sm"
+                      placeholder={`Payer ${i+1} Stellar address (G…) — add ${fmt(appKeypair.publicKey())} to mark paid`}
+                      value={p}
+                      onChange={e=>{const a=[...payersList];a[i]=e.target.value;setPayersList(a);}}
+                    />
+                  </div>
+                ))}
+                <button
+                  onClick={createBill}
+                  disabled={billTx==="pending"||!desc||!amount||!payers||payersList.filter(p=>p).length!==Number(payers)}
+                  className="btn btn-primary btn-lg btn-full"
+                >
+                  {billTx==="pending" ? "Creating…" : "Create Bill"}
+                </button>
+              </div>
+
+              {/* Bill List */}
+              <div className="dapp-card">
+                <div className="dapp-card-header">
+                  <h3 className="dapp-card-title">Active Bills</h3>
+                  <button onClick={loadBills} className="btn btn-secondary btn-sm">Refresh</button>
                 </div>
                 {bills.length===0 ? (
-                  <p className="font-mono text-xs text-muted text-center py-12">No bills yet. Create your first one above!</p>
+                  <div className="empty-state">
+                    <p>No bills yet. Click Refresh to load from the contract.</p>
+                  </div>
                 ) : bills.map(b=>(
                   <div key={b.id} className="bill-card">
-                    <div className="flex items-start justify-between mb-2">
-                      <span className="font-mono text-xs font-bold px-2 py-0.5 border-2 bg-cyan">#{b.id}</span>
-                      <span className={`font-mono text-xs font-bold uppercase px-2 py-0.5 border-2 ${b.completed?"bg-lime":"bg-yellow"}`}>{b.completed?"DONE":"ACTIVE"}</span>
+                    <div className="bill-card-head">
+                      <div className="bill-badge bill-badge-id">#{b.id}</div>
+                      <div className={`bill-badge ${b.completed ? "bill-badge-done" : "bill-badge-active"}`}>
+                        {b.completed ? "Completed" : "Active"}
+                      </div>
                     </div>
-                    <h4 className="font-display text-lg uppercase mb-2">{b.description}</h4>
-                    <div className="flex flex-wrap gap-4 font-mono text-xs text-muted mb-3">
-                      <span>💰 {b.total_amount/1e7} XLM</span>
-                      <span>👤 {b.share_per_person/1e7} each</span>
-                      <span>✅ {b.paid_count}/{b.payer_count} paid</span>
+                    <h4 className="bill-title">{b.description}</h4>
+                    <div className="bill-meta">
+                      <span>{(b.total_amount/1e7).toFixed(4)} XLM total</span>
+                      <span>{(b.share_per_person/1e7).toFixed(4)} each</span>
+                      <span>{b.paid_count}/{b.payer_count} paid</span>
                     </div>
-                    <div className="progress-bar">
+                    <div className="progress-track">
                       <div className="progress-fill" style={{width:`${b.payer_count>0?(b.paid_count/b.payer_count)*100:0}%`}} />
                     </div>
                     {!b.completed && (
-                      <button onClick={()=>markPaid(b.id)} disabled={payTx==="pending"} className="brutal-btn w-full py-2.5 text-sm bg-lime font-display tracking-wider">
-                        {payTx==="pending"?"PAYING…":`💳 MARK AS PAID — ${b.share_per_person/1e7} XLM`}
+                      <button onClick={()=>markPaid(b.id)} disabled={payTx==="pending"} className="btn btn-accent btn-full btn-sm">
+                        {payTx==="pending" ? "Processing…" : `Mark as Paid — ${(b.share_per_person/1e7).toFixed(4)} XLM`}
                       </button>
                     )}
                   </div>
@@ -271,14 +621,26 @@ export default function App() {
         </div>
       </section>
 
-      {/* ═══════ FOOTER ═══════ */}
+      {/* ═══════════ FOOTER ═══════════ */}
       <footer className="footer">
-        <div className="container text-center">
-          <p className="font-display text-2xl uppercase mb-2">💸 Stellar Split Bill</p>
-          <p className="font-mono text-xs text-muted mb-4">Orange Belt · Stellar Journey to Mastery · June 2026</p>
-          <div className="flex justify-center gap-4">
-            <a href="https://github.com/yt2025id-lab/stellar-split-bill" target="_blank" rel="noopener" className="font-mono text-xs font-bold uppercase border-3 bg-white hover:bg-yellow transition-colors px-4 py-2">GitHub</a>
-            <a href="https://stellar.expert/explorer/testnet/contract/CCRVTPOVHJZ7KLANM2AEPIQPLSDWIDK2M66GJQHFEHJVJPHGDCKQOGJ3" target="_blank" rel="noopener" className="font-mono text-xs font-bold uppercase border-3 bg-white hover:bg-cyan transition-colors px-4 py-2">Contract</a>
+        <div className="container">
+          <div className="footer-inner">
+            <StellarSplitBillLogo size={34} logoSize={92} />
+            <span className="footer-tag">Orange Belt · Stellar Journey to Mastery · 2026</span>
+            <div className="footer-links">
+              <a href="https://github.com/yt2025id-lab/stellar-split-bill" target="_blank" rel="noopener" title="GitHub">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+                </svg>
+              </a>
+              <a href={`${EXPLORER_BASE}/contract/${CORE_ID}`} target="_blank" rel="noopener" title="Stellar Expert">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
+                  <path d="M2 12h20"/>
+                </svg>
+              </a>
+            </div>
           </div>
         </div>
       </footer>

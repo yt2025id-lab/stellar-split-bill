@@ -40,7 +40,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# suivan-story additions
+# split-bill-storytelling additions
 node_modules
 .next
 out

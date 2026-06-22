@@ -20,7 +20,7 @@ describe("SceneHero", () => {
     expect(screen.getByText("Bills")).toBeInTheDocument();
     expect(screen.getByText("Trustless")).toBeInTheDocument();
     const cta = screen.getByRole("link", { name: /buka dapp/i });
-    expect(cta).toHaveAttribute("href", "https://suivan.vercel.app");
+    expect(cta).toHaveAttribute("href", "https://split-bill-dapp.vercel.app");
   });
 });
 
@@ -69,6 +69,6 @@ describe("Cta", () => {
   it("links the primary button to the dApp", () => {
     withLocale(<Cta />);
     const launch = screen.getByRole("link", { name: /launch the app/i });
-    expect(launch).toHaveAttribute("href", "https://suivan.vercel.app");
+    expect(launch).toHaveAttribute("href", "https://split-bill-dapp.vercel.app");
   });
 });

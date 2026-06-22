@@ -1,15 +1,11 @@
-# Suivan — Storytelling Site
+# Split Bill — Storytelling Site
 
-An interactive, scroll-driven storytelling website for **Suivan**, an on-chain
-**ROSCA** (rotating savings circle / Indonesian *arisan*) protocol built natively
-on the **Sui** blockchain. The site narrates how a centuries-old, trust-based
-savings tradition is brought on-chain, and funnels visitors to the live dApp.
+An interactive, scroll-driven storytelling website for **Split Bill**, an on-chain
+decentralized bill-splitting protocol built natively on the **Stellar Soroban** blockchain.
 
-> **Tagline:** Moving trust into code.
+> **Tagline:** Split any bill. Zero drama.
 
-- **Live dApp:** https://suivan.vercel.app
-- **Story:** arisan → bring it on-chain → the trust problem → 125% collateral →
-  double yield → the on-chain system → the Sui stack → proof → join.
+- **Live dApp:** https://split-bill-dapp.vercel.app
 
 ## Features
 
@@ -18,10 +14,9 @@ savings tradition is brought on-chain, and funnels visitors to the live dApp.
   pin-and-reveal storytelling, so each beat can be read fully before moving on.
 - **Element-level motion** — headlines, copy, cards and graphics reveal in
   sequence as you scroll; nothing is just a static fade-in.
-- **Light neo-brutalism** — bold ink borders, hard offset shadows, Bebas Neue
-  display type, and a per-section tinted background with a meaning-carrying
-  "ghost" word (e.g. a red **TRUST** on *The Crack*).
-- **Brand identity** — the Suivan community-circle emblem across the nav,
+- **Clean Web3 design** — professional dark theme, subtle glass effects,
+  Space Grotesk / Inter typography, emerald-teal accent gradient.
+- **Brand identity** — the Split Bill emblem across the nav,
   intro, hero, and closing sign-off.
 - **Bilingual (EN / ID)** — instant language switch.
 - **Custom-built SVG graphics** — generated in code, scroll-reactive (lines
@@ -36,7 +31,7 @@ savings tradition is brought on-chain, and funnels visitors to the live dApp.
 - [Tailwind CSS v4](https://tailwindcss.com/)
 - [GSAP](https://gsap.com/) + ScrollTrigger, [Lenis](https://lenis.darkroom.engineering/) smooth scroll, [SplitType](https://github.com/lukePeavey/SplitType)
 - [Vitest](https://vitest.dev/) + Testing Library
-- Deployed on [Vercel](https://vercel.com/)
+- Deployed on [Vercel](https://vercel.app/)
 
 ## Getting Started
 
@@ -62,7 +57,7 @@ components/
   scenes/            # fixed-stage intro deck (Hero / Akar / Percikan)
   sections/          # pinned story sections (Retakan, Tempaan, Nyala, Sistem, …)
   graphics/          # code-generated SVG motifs + scroll-reactive art
-  brand/             # Suivan logo / mark
+  brand/             # Split Bill logo / mark
   motion/            # reusable GSAP hooks (reveal, pin, parallax, magnetic, …)
   fx/                # preloader, custom cursor, grid texture
   ui/                # buttons, nav, marquee, ghost word, language switch
@@ -80,4 +75,4 @@ plain vertical layout on small screens.
 
 ---
 
-Built by the **ARSUI Team** for the Suivan protocol.
+Built for the **Stellar Split Bill** protocol.
