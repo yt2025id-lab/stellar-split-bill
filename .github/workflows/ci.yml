@@ -13,13 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Build contracts
-        run: cargo build --release
       - name: Run contract tests
         run: cargo test
 
-  frontend-tests:
-    name: Frontend Build Check
+  frontend-build:
+    name: Frontend Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +32,7 @@ jobs:
         run: npm run build
 
   deploy-contracts:
-    name: Deploy Contracts
+    name: Deploy Contracts to Testnet
     needs: contract-tests
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -44,7 +42,7 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - name: Install Stellar CLI
-        run: cargo install --locked stellar-cli --features opt
+        run: cargo install --locked stellar-cli
       - name: Build contracts
         run: cargo build --release --target wasm32-unknown-unknown
       - name: Deploy split-token
@@ -71,7 +69,7 @@ jobs:
 
   deploy-frontend:
     name: Deploy Frontend to Vercel
-    needs: frontend-tests
+    needs: frontend-build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
