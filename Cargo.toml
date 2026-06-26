@@ -1,26 +1,3 @@
 [workspace]
+members = ["contracts/factory", "contracts/vault"]
 resolver = "2"
-members = [
-  "contracts/split-token",
-  "contracts/split-core",
-]
-
-[workspace.dependencies]
-soroban-sdk = "26"
-
-[workspace.metadata.vsn]
-preview = true
-
-[profile.release]
-opt-level = "z"
-overflow-checks = true
-debug = 0
-strip = "symbols"
-debug-assertions = false
-panic = "abort"
-codegen-units = 1
-lto = true
-
-[profile.release-with-logs]
-inherits = "release"
-debug-assertions = true
