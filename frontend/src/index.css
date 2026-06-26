@@ -1106,6 +1106,144 @@ h1, h2, h3, h4 { font-family: var(--font-heading); font-weight: 600; line-height
 .rounded-full { border-radius: 9999px; }
 .inline-flex { display: inline-flex; }
 
+/* ═══════════ Dashboard Header (Yellow Belt style) ═══════════ */
+.dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 32px;
+  padding: 16px 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+}
+
+.dash-header-right { display: flex; align-items: center; gap: 10px; }
+
+.dash-logo { display: flex; align-items: center; gap: 12px; }
+.dash-logo img { height: 44px; width: 44px; }
+.dash-logo-text { display: flex; flex-direction: column; gap: 2px; }
+.dash-logo-name { font-size: 1rem; font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em; line-height: 1; }
+.dash-logo-tag { font-size: 0.6rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* ═══════════ Wallet Info Card ═══════════ */
+.wallet-info-card { padding: 20px 24px; }
+.wallet-info-row { display: flex; flex-wrap: wrap; gap: 24px; }
+.wallet-info-item { display: flex; flex-direction: column; gap: 2px; }
+.wallet-info-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+.wallet-info-value { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); }
+.wallet-info-value.mono { font-family: var(--font-mono); font-size: 0.75rem; }
+.wallet-info-value.highlight { color: var(--accent-teal); }
+
+/* ═══════════ Guide Card ═══════════ */
+.guide-card { padding: 24px; }
+.guide-title { font-family: var(--font-heading); font-size: 1rem; font-weight: 700; margin-bottom: 18px; letter-spacing: -0.01em; }
+.guide-steps { display: flex; flex-direction: column; gap: 16px; }
+.guide-step { display: flex; gap: 14px; align-items: flex-start; }
+.guide-num { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(244,132,26,0.1); color: var(--accent-teal); font-family: var(--font-heading); font-size: 0.75rem; font-weight: 700; flex-shrink: 0; }
+.guide-step strong { font-size: 0.8125rem; color: var(--text-primary); display: block; margin-bottom: 2px; }
+.guide-step p { font-size: 0.75rem; color: var(--text-muted); line-height: 1.55; }
+
+/* ═══════════ Card Full ═══════════ */
+.card-full { margin-bottom: 16px; }
+
+/* ═══════════ Connect Wallet Button ═══════════ */
+.btn-connect {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 22px;
+  border: 1px solid var(--accent-teal);
+  border-radius: 10px;
+  background: rgba(244,132,26,0.12);
+  color: var(--accent-teal);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-connect:hover { background: rgba(244,132,26,0.22); box-shadow: 0 0 16px rgba(244,132,26,0.25); }
+
+/* ═══════════ Wallet Modal (Yellow Belt style) ═══════════ */
+.wallet-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(6px);
+}
+.wallet-modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: 20px;
+  width: 360px;
+  max-width: 90vw;
+  overflow: hidden;
+  animation: modalIn 0.25s ease;
+}
+@keyframes modalIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.wallet-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border-default);
+}
+.wallet-modal-header h3 { font-size: 0.95rem; font-weight: 700; }
+.wallet-modal-close {
+  background: none; border: none; font-size: 1.25rem; cursor: pointer;
+  color: var(--text-muted); padding: 4px;
+}
+.wallet-modal-close:hover { color: var(--error); }
+.wallet-modal-list { padding: 8px 0; }
+.wallet-modal-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 24px; cursor: pointer; transition: background 0.15s;
+  border: none; background: none; width: 100%; text-align: left;
+  font-family: var(--font-sans);
+}
+.wallet-modal-item:hover { background: var(--bg-elevated); }
+.wallet-modal-icon {
+  width: 40px; height: 40px; display: flex; align-items: center;
+  justify-content: center; border-radius: 10px; background: var(--bg-elevated);
+  font-size: 0.85rem; font-weight: 700; color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+}
+.wallet-modal-logo { width: 28px; height: 28px; }
+.wallet-modal-name { font-size: 0.9rem; font-weight: 600; color: var(--text-primary); }
+
+/* ═══════════ Section subtitle fix ═══════════ */
+.section-subtitle { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 32px; }
+
+/* ═══════════ Main content area ═══════════ */
+.dash-main { padding: 0 20px 60px; }
+
+/* ═══════════ Vault Deploy Status ═══════════ */
+.deploy-steps { display: flex; flex-direction: column; gap: 8px; }
+.deploy-step {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-mono); font-size: 0.75rem;
+  padding: 6px 0; color: var(--text-muted);
+}
+.deploy-step.done { color: var(--success); }
+.deploy-step.active { color: var(--accent-teal); font-weight: 600; }
+.deploy-step-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--text-muted);
+}
+.deploy-step.done .deploy-step-dot { background: var(--success); }
+.deploy-step.active .deploy-step-dot {
+  background: var(--accent-teal);
+  box-shadow: 0 0 6px rgba(244,132,26,0.5);
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+
 /* ═══════════ 3D Sphere Loader ═══════════ */
 /* Adapted from: Uiverse.io by 20essentials */
 .sphere-container {

@@ -6,4 +6,7 @@ export default defineConfig({
   resolve: {
     dedupe: ["@stellar/stellar-base"],
   },
+  define: {
+    global: 'globalThis',
+  },
 })
