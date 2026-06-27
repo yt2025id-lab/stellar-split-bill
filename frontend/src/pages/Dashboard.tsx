@@ -49,24 +49,28 @@ async function ensureFunded() {
 
 async function deployVault(salt: Buffer): Promise<string> {
   const wasmHash = Buffer.from(VAULT_WASM, "hex");
+  const wasmXdr = new xdr.Hash(wasmHash);
+
+  const enc = new TextEncoder();
+  const passBytes = enc.encode(Networks.TESTNET);
+  const hashBuf = await crypto.subtle.digest("SHA-256", passBytes);
+  const netId = xdr.Hash.fromXDR(Buffer.from(hashBuf).toString("hex"), "hex");
+
   const preimage = xdr.HashIdPreimage.envelopeTypeContractId(
     new xdr.HashIdPreimageContractId({
-      networkId: xdr.Hash.fromXDR((await rpcCall("getNetwork", {}))["passphrase"] as string, "base64"),
+      networkId: netId,
       contractIdPreimage: xdr.ContractIdPreimage.contractIdPreimageFromAddress(
-        new xdr.ContractIdPreimageFromAddress({ address: xdr.ScAddress.scAddressTypeContract(new xdr.Hash(wasmHash)), salt: salt })
+        new xdr.ContractIdPreimageFromAddress({ address: xdr.ScAddress.scAddressTypeContract(wasmXdr), salt })
       ),
     })
   );
-  const hash = xdr.Hash.fromXDR(Buffer.from(preimage.toXDR()).toString("hex"), "hex");
-  const vaultId = Address.fromScAddress(xdr.ScAddress.scAddressTypeContract(new xdr.Hash(hash)));
+  const preimageHash = await crypto.subtle.digest("SHA-256", Buffer.from(preimage.toXDR(), "base64"));
+  const hash = xdr.Hash.fromXDR(Buffer.from(preimageHash).toString("hex"), "hex");
+  const vaultId = Address.fromScAddress(xdr.ScAddress.scAddressTypeContract(hash));
 
   const acct = await server.loadAccount(appKP.publicKey());
   const raw = new TransactionBuilder(acct, { fee: "100000", networkPassphrase: Networks.TESTNET })
-    .addOperation(Operation.createCustomContract({
-      address: xdr.ScAddress.scAddressTypeContract(new xdr.Hash(wasmHash)),
-      wasmHash: wasmHash,
-      salt: salt,
-    }))
+    .addOperation(Operation.createCustomContract({ address: xdr.ScAddress.scAddressTypeContract(wasmXdr), wasmHash, salt }))
     .setTimeout(300).build();
 
   const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { minResourceFee: string; transactionData: string; error?: string };
@@ -76,7 +80,7 @@ async function deployVault(salt: Buffer): Promise<string> {
   const sd = xdr.SorobanTransactionData.fromXDR(sim.transactionData, "base64");
   const fresh = await server.loadAccount(appKP.publicKey());
   const tx = new TransactionBuilder(fresh, { fee, networkPassphrase: Networks.TESTNET, sorobanData: sd })
-    .addOperation(Operation.createCustomContract({ address: xdr.ScAddress.scAddressTypeContract(new xdr.Hash(wasmHash)), wasmHash, salt }))
+    .addOperation(Operation.createCustomContract({ address: xdr.ScAddress.scAddressTypeContract(wasmXdr), wasmHash, salt }))
     .setTimeout(300).build();
   tx.sign(appKP);
   const send = await rpcCall("sendTransaction", { transaction: tx.toXDR() }) as unknown as { hash: string; errorResult?: string };
