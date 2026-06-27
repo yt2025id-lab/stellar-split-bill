@@ -211,10 +211,11 @@ stellar-orange-belt/
 
 Every push to `main` triggers:
 
-1. **Smart Contract Tests** — `cargo test` (6 tests)
-2. **WASM Build** — Builds factory + vault for deployment
-3. **Frontend Build** — `npm run build`
-4. **Vercel Deploy** — Auto-deploys on successful build
+1. ✅ **Smart Contract Tests** — `cargo test` (6 tests)
+2. ✅ **WASM Build** — Builds factory + vault for deployment
+3. ✅ **Frontend Build** — `npm run build`
+
+[![CI/CD](https://github.com/yt2025id-lab/stellar-split-bill/actions/workflows/ci.yml/badge.svg)](https://github.com/yt2025id-lab/stellar-split-bill/actions)
 
 ---
 
