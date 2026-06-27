@@ -1,13 +1,13 @@
-# 💸 Stellar Split Bill
+# Split Bill — Stellar Orange Belt
 
 <div align="center">
 
 **Decentralized Bill Splitting Protocol on Soroban**
 
-*Split any expense. Share the burden. Settle on-chain.*
+Two smart contracts communicating via inter-contract calls on Stellar Testnet.
 
-[![Tests](https://img.shields.io/badge/tests-12%20passed-brightgreen)](https://github.com/yt2025id-lab/stellar-split-bill/actions)
-[![Soroban](https://img.shields.io/badge/soroban-sdk%20v26-blue)](https://soroban.stellar.org)
+[![Tests](https://img.shields.io/badge/tests-6%20passed-brightgreen)](https://github.com/yt2025id-lab/stellar-split-bill/actions)
+[![Soroban](https://img.shields.io/badge/soroban-sdk%20v22-blue)](https://soroban.stellar.org)
 [![React](https://img.shields.io/badge/react-19-61DAFB)](https://react.dev)
 [![License](https://img.shields.io/badge/license-MIT-purple)](LICENSE)
 
@@ -15,184 +15,208 @@
 
 ---
 
-## 🎯 What is Split Bill?
+## What is Split Bill?
 
-Split Bill is a **decentralized expense-sharing protocol** built on Stellar Soroban. Create a bill, invite friends, and track payments — all settled via smart contracts with **inter-contract communication**.
+Split Bill lets you create a shared expense (a "bill"), invite participants by their Stellar addresses, and collect XLM contributions directly on-chain. When the bill is fully funded, the vault contract automatically sends the total amount to the bill creator via a cross-contract call to the factory.
 
 > *"Pizza for 4? Everyone pays exactly their share. No awkward math. No chasing people."*
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    Frontend (React)                   │
-│          Web3 Dark Theme • Mobile-First • Vite         │
-└──────────────┬────────────────────┬──────────────────┘
-               │                    │
-          Freighter              Raw RPC
-          Wallet                 (fetch)
-               │                    │
-┌──────────────▼────────────────────▼──────────────────┐
-│                  Stellar Soroban Testnet               │
-│                                                        │
-│  ┌──────────────────┐    INTER-CONTRACT    ┌─────────┐│
-│  │   split-core     │ ◄──────────────────► │  split- ││
-│  │                  │    burn()             │  token  ││
-│  │  • create_bill   │                      │         ││
-│  │  • mark_paid     │                      │ • mint  ││
-│  │  • get_all_bills │                      │ • burn  ││
-│  └──────────────────┘                      │ • xfer  ││
-│                                             └─────────┘│
-└─────────────────────────────────────────────────────────┘
+
+                        Frontend (React 19 + Vite)
+                     Multi-Wallet (Freighter, Albedo, xBull, Rabet)
+                               │
+                               │ JSON-RPC (fetch)
+                               │
+          ┌────────────────────▼────────────────────┐
+          │           Stellar Soroban Testnet         │
+          │                                            │
+          │  ┌──────────────────┐   INTER-CONTRACT    │
+          │  │  SplitBillFactory │ ◄────────────────── │
+          │  │                   │   settle_bill()     │
+          │  │ • register_bill   │                     │
+          │  │ • settle_bill     │                     │
+          │  │ • get_bills       │                     │
+          │  └──────────────────┘                     │
+          │         │                                  │
+          │         │ deploys                          │
+          │         ▼                                  │
+          │  ┌──────────────────┐                      │
+          │  │    BillVault     │   (1 per bill)        │
+          │  │                  │                      │
+          │  │ • contribute     │                      │
+          │  │ • refund         │                      │
+          │  │ • get_details    │                      │
+          │  │ • get_status     │                      │
+          │  │ • get_contributions                     │
+          │  └──────────────────┘                      │
+          └────────────────────────────────────────────┘
 ```
 
 ### Inter-Contract Communication
 
+When a bill is fully funded (all participants have contributed their full share), the vault calls the factory via `env.invoke_contract`:
+
 ```rust
-// split-core calls split-token to burn obligation tokens
-env.invoke_contract::<()>(
-    &token_addr,
-    &symbol_short!("burn"),
-    vec![&env, payer.to_val(), amount.into_val(&env)],
+// BillVault calls SplitBillFactory.settle_bill() when fully funded
+env.invoke_contract::<Val>(
+    &self.factory,
+    &Symbol::new(&env, "settle_bill"),
+    vec![&env, self.id.into_val(&env), self.creator.to_val()],
 );
 ```
 
----
-
-## 🔒 Security Audit
-
-| # | Finding | Severity | Status |
-|---|---------|----------|--------|
-| 1 | Integer overflow in `initialize` | 🔴 CRITICAL | ✅ Fixed — `checked_mul` |
-| 2 | Integer division truncation | 🔴 CRITICAL | ✅ Fixed — exact division enforced |
-| 3 | No payer authorization | 🔴 CRITICAL | ✅ Fixed — whitelist per bill |
-| 4 | Duplicate payment possible | 🔴 CRITICAL | ✅ Fixed — `Vec<bool>` tracker |
-| 5 | Amount = 0 accepted | 🟡 MEDIUM | ✅ Fixed — `amount > 0` required |
-| 6 | Missing contract events | 🟡 MEDIUM | ✅ Fixed — all state changes emit events |
-| 7 | Unbounded bill storage | 🟡 MEDIUM | ✅ Fixed — `MAX_BILLS = 100` |
+The factory then marks the bill as settled, and the vault sends the total XLM to the creator. Both contracts emit events in a single transaction.
 
 ---
 
-## 🧪 Test Coverage
+## Smart Contracts
+
+### SplitBillFactory (`contracts/factory/`)
+
+The central registry that manages all bills:
+
+| Function | Description |
+|----------|-------------|
+| `register_bill(creator, participants, shares, description)` | Register a new bill |
+| `settle_bill(bill_id, creator)` | Called by vault when fully funded |
+| `get_bills()` | List all registered bills |
+
+### BillVault (`contracts/vault/`)
+
+One vault contract deployed per bill:
+
+| Function | Description |
+|----------|-------------|
+| `__constructor()` | No-arg constructor for `env.register()` |
+| `init(factory, id, creator, participants, shares, deadline)` | Initialize vault |
+| `contribute(participant)` | Contribute share amount |
+| `refund(participant)` | Refund if deadline passed |
+| `get_details()` | Get bill details (participants, shares, total) |
+| `get_status()` | Get current status |
+| `get_contributions()` | Get individual contributions |
+
+---
+
+## Test Coverage
 
 ```
-split-token (5 tests)          split-core (7 tests)
-├── test_initialize    ✅       ├── test_initialize                 ✅
-├── test_transfer      ✅       ├── test_create_bill                ✅
-├── test_mint          ✅       ├── test_uneven_split_rejected      ✅
-├── test_burn          ✅       ├── test_mark_paid_and_complete     ✅
-├── test_zero_rejected ✅       ├── test_inter_contract_burn        ✅
-                                ├── test_unauthorized_rejected      ✅
-                                └── test_double_payment_rejected    ✅
+SplitBillFactory (2 tests)          BillVault (4 tests)
+├── test_create_and_list_bills  ✅  ├── test_contribute_and_settle  ✅
+└── test_settle_bill            ✅  ├── test_partial_contribution   ✅
+                                    ├── test_double_contribute     ✅
+                                    └── test_non_participant       ✅
+```
+
+Run tests:
+```bash
+cargo test
 ```
 
 ---
 
-## 🚀 Deployed Contracts
+## Deployed Contracts
 
-| Contract | Address | Network |
-|----------|---------|---------|
-| `split-token` | [`CCJ5ME…53X5`](https://stellar.expert/explorer/testnet/contract/CCJ5MEBLFYVFOPN4EDO53IFQOCBWHO7SGIFEWXSKCTNHGTBZ6TTY53X5) | Testnet |
-| `split-core` | [`CCRVT…OGJ3`](https://stellar.expert/explorer/testnet/contract/CCRVTPOVHJZ7KLANM2AEPIQPLSDWIDK2M66GJQHFEHJVJPHGDCKQOGJ3) | Testnet |
+| Contract | Address / Hash | Network |
+|----------|---------------|---------|
+| SplitBillFactory | [`CA7R7GECD23KFFLYSQRSAROZ52Y3UAEO6JAJBTO4WCK46PV3IJUY4L5M`](https://stellar.expert/explorer/testnet/contract/CA7R7GECD23KFFLYSQRSAROZ52Y3UAEO6JAJBTO4WCK46PV3IJUY4L5M) | Testnet |
+| BillVault WASM | `c504b92008ef1c1da3ca51ef561c0b1666bfea114519b06fc4a659518cef458e` | Testnet |
 
-### Verified Contract Interactions
+---
+
+## Transaction Hashes
 
 | Action | TX Hash | Explorer |
 |--------|---------|----------|
-| `create_bill` | `4d85b4…` | [View](https://stellar.expert/explorer/testnet/tx/4d85b4b39d1cd1ca26607085eb799a2628387778523b36fb4379ed7eb40e0605) |
-| `mark_paid` (inter-contract burn) | `746eb4…` | [View](https://stellar.expert/explorer/testnet/tx/746eb4f75c44cd97877d3bb10f7f2b727c66220c82a3c8c473d0645075587292) |
-| `mint` (token to payer) | `53d19b…` | [View](https://stellar.expert/explorer/testnet/tx/53d19b24ea8778712fe570b2a9cf335c72fbf77a47353b5eaa9afce70a87c78b) |
-
-The `mark_paid` transaction emits events from **both contracts** — `burn` from `split-token` and `bill.paid` from `split-core` — demonstrating inter-contract communication.
+| Factory deploy | `b97e498466a9b54aa19625a95fdb67aae6127264f5991db4e3eb230983903f18` | [View](https://stellar.expert/explorer/testnet/tx/b97e498466a9b54aa19625a95fdb67aae6127264f5991db4e3eb230983903f18) |
+| Vault deploy + init + register | `c58a204f5a276c541e2c9e3f96e190a59e41132264fd21d8e4e423ba23f45150` | [View](https://stellar.expert/explorer/testnet/tx/c58a204f5a276c541e2c9e3f96e190a59e41132264fd21d8e4e423ba23f45150) |
+| Contribute + cross-contract settle | `f3f2b4de6f359b3a23a5f8dc5355eb1664f05a6cd8f3619ac6f6b6b3ed170d4d` | [View](https://stellar.expert/explorer/testnet/tx/f3f2b4de6f359b3a23a5f8dc5355eb1664f05a6cd8f3619ac6f6b6b3ed170d4d) |
 
 ---
 
-## 🎨 Professional Web3 Design
-
-```
-Orange dark theme  •  3D animated sphere  •  Grid background
-Inter  •  JetBrains Mono  •  Geometric sans-serif
-#FF7A00 Orange  •  #0A0A0A Dark  •  #FFD700 Gold accent
-```
-
-Fully mobile-responsive with `viewport-fit=cover` for iOS safe areas and 480px breakpoint.
-
----
-
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Smart Contracts | Rust • Soroban SDK v26 |
-| Frontend | React 19 • TypeScript • Vite 8 |
-| Wallet | Freighter Browser Extension |
-| RPC | Raw `fetch` JSON-RPC (no SDK bloat) |
+| Smart Contracts | Rust • Soroban SDK v22.0.3 |
+| Frontend | React 19 • TypeScript • Vite |
+| Wallets | Freighter, Albedo, xBull, Rabet |
+| Styling | Tailwind 4 • Dark theme |
 | CI/CD | GitHub Actions |
 | Hosting | Vercel |
-| Styling | Web3 Dark CSS |
 
 ---
 
-## ⚡ Quick Start
+## Quick Start
 
 ```bash
-# Contracts
-cargo build --release --target wasm32v1-none
+# Prerequisites
+rustup target add wasm32-unknown-unknown
+
+# Build contracts
+cd contracts
+cargo build --release --target wasm32-unknown-unknown
+
+# Run tests
 cargo test
 
 # Frontend
 cd frontend
 npm install
-npm run dev        # → http://localhost:5173
+npm run dev        # → http://localhost:3001
 ```
 
 ### Environment Variables
 
 ```bash
-# .env
-VITE_HORIZON_URL=https://horizon-testnet.stellar.org
-VITE_RPC_URL=https://soroban-testnet.stellar.org
-VITE_TOKEN_CONTRACT=CC...
-VITE_CORE_CONTRACT=CC...
+# frontend/.env
+VITE_FACTORY_CONTRACT=CA7R7GECD23KFFLYSQRSAROZ52Y3UAEO6JAJBTO4WCK46PV3IJUY4L5M
+VITE_VAULT_WASM_HASH=c504b92008ef1c1da3ca51ef561c0b1666bfea114519b06fc4a659518cef458e
 ```
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```
-stellar-split-bill/
+stellar-orange-belt/
 ├── contracts/
-│   ├── split-token/src/     # Token contract
-│   │   ├── lib.rs           # Contract logic
-│   │   └── test.rs          # 5 tests
-│   └── split-core/src/      # Core contract (inter-contract)
-│       ├── lib.rs           # Bill logic + burn() call
-│       └── test.rs          # 7 tests
+│   ├── factory/src/   # SplitBillFactory contract
+│   │   ├── lib.rs     # Register, settle, list bills
+│   │   └── test.rs    # 2 unit tests
+│   └── vault/src/     # BillVault contract
+│       ├── lib.rs     # Contribute, refund, cross-contract
+│       └── test.rs    # 4 unit tests
 ├── frontend/
 │   └── src/
-│       ├── App.tsx          # Main dApp
-│       ├── index.css        # Web3 dark styles
+│       ├── pages/
+│       │   ├── Landing.tsx   # Marketing page
+│       │   └── Dashboard.tsx # dApp interface
+│       ├── App.tsx          # Router
 │       └── main.tsx         # Entry point
 ├── .github/workflows/
 │   └── ci.yml               # CI/CD pipeline
+├── Cargo.toml               # Workspace
 └── README.md
 ```
 
 ---
 
-## 🔄 CI/CD Pipeline
+## CI/CD Pipeline
 
-```
-Push → [Contract Tests] → [Frontend Build]
-                           ↓
-                    [Deploy Contracts] → [Deploy Frontend]
-```
+Every push to `main` triggers:
+
+1. **Smart Contract Tests** — `cargo test` (6 tests)
+2. **WASM Build** — Builds factory + vault for deployment
+3. **Frontend Build** — `npm run build`
+4. **Vercel Deploy** — Auto-deploys on successful build
 
 ---
 
-## 📜 License
+## License
 
-MIT © 2026 — Built for Stellar Journey to Mastery • Orange Belt 🟠
+MIT © 2026 — Built for Stellar Journey to Mastery • Orange Belt

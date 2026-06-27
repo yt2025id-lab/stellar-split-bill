@@ -1,79 +1,58 @@
-# 🏆 Submission Notes — Why Split Bill Deserves #1
+# Submission Notes — Split Bill (Orange Belt)
 
-## Submission Form Fill-In Guide
-
-### Project Name
+## Project Name
 **Stellar Split Bill** — Decentralized Bill Splitting Protocol
 
-### Tagline
-Split any expense. Share the burden. Settle on-chain.
+## Tagline
+Split any expense. Share the burden. Settle on-chain via inter-contract communication.
 
-### Description (max 500 chars)
-Split Bill is a decentralized expense-sharing protocol built on Stellar Soroban with two smart contracts communicating via inter-contract calls. Create a bill, invite friends by their Stellar addresses, mint obligation tokens, and mark payments — the Split Core contract automatically calls Split Token to burn tokens when you pay. All transactions emit events verified on-chain. 30 commits. 26 tests. CI/CD green. Production-ready.
+## Description
+Split Bill is a decentralized expense-sharing protocol on Stellar Soroban with two smart contracts communicating via inter-contract calls. The SplitBillFactory manages bill registration, and a per-bill BillVault contract handles XLM contributions. When fully funded, the vault automatically calls the factory via `env.invoke_contract` to settle — both contracts emit events in one transaction. 6 smart contract tests pass. CI/CD green.
 
-### What makes your project unique?
-Inter-contract communication with obligation token burn verification. Unlike simple token swap dApps, Split Bill's split-core contract atomically calls split-token.burn() when a payer marks their bill as paid — both contracts emit events in a single transaction, verified on Stellar Expert. This is true composability: two Rust contracts working together with authorization checks, payer whitelists, double-payment prevention, and automatic bill completion.
+## What makes your project unique?
+Inter-contract communication with automatic settlement. Unlike simple escrow dApps, Split Bill's vault contract atomically calls the factory's `settle_bill` function when all participants have paid — the total XLM is transferred to the creator in the same transaction. Each bill gets its own vault contract deployed dynamically, with authorization checks, duplicate payment prevention, refund after deadline, and cross-contract events verified on-chain.
 
-### Technical Highlights (bullet points for submission form)
-- **Inter-Contract Communication**: split-core → `env.invoke_contract(token_addr, burn, [payer, amount])` — both contracts emit events in 1 TX
-- **Security Audit**: 7 findings addressed — overflow protection (`checked_mul`), exact division enforcement, payer whitelist, Vec<bool> double-payment tracker, MAX_BILLS = 100 cap
-- **12 Smart Contract Tests**: create_bill, mark_paid, inter_contract_burn, unauthorized rejection, uneven split rejection, double payment rejection, zero amount rejection
-- **14 Frontend Tests**: hero rendering, all section content, i18n dictionary shape validation
-- **CI/CD Pipeline**: GitHub Actions — contract tests + frontend build pass on every push
-- **30 Meaningful Commits**: from scaffold to production-ready with descriptive messages
-- **3 Verified TX Hashes on Testnet**: create_bill, mint, mark_paid (inter-contract burn confirmed)
-- **Mobile Responsive**: 480px breakpoint, viewport-fit=cover, professional Web3 dark theme
-- **Error Handling**: try/catch with typed error messages, honeycomb loader, spinner, status bar with TX links
+## Technical Highlights
+- **Inter-Contract Communication**: BillVault → `env.invoke_contract(&factory, "settle_bill", ...)` — vault + factory emit events in 1 TX
+- **Dynamic Vault Deployment**: Each bill deploys a fresh vault instance from WASM hash
+- **6 Smart Contract Tests**: create_and_list, settle, contribute, partial_contribution, double_contribute fails, non-participant fails
+- **34 Meaningful Commits**: scaffold → contracts → tests → deploy → frontend → polish
+- **Multi-Wallet**: Freighter, Albedo, xBull, Rabet
+- **Mobile Responsive**: Tailwind 4, dark theme, works on all screen sizes
+- **CI/CD Pipeline**: GitHub Actions — contract tests + WASM build + frontend build on every push
 
-### Links
+## Links
 - **GitHub**: https://github.com/yt2025id-lab/stellar-split-bill
-- **Live Demo**: https://frontend-ivory-nine-47.vercel.app
+- **Live Demo**: https://stellar-split-bill.vercel.app
 - **Demo Video**: [INSERT YOUTUBE/DRIVE LINK]
 
-### Contract Addresses (Testnet)
-- **Split Token**: CCJ5MEBLFYVFOPN4EDO53IFQOCBWHO7SGIFEWXSKCTNHGTBZ6TTY53X5
-- **Split Core**: CCRVTPOVHJZ7KLANM2AEPIQPLSDWIDK2M66GJQHFEHJVJPHGDCKQOGJ3
+## Contract Addresses (Testnet)
+- **SplitBillFactory**: CA7R7GECD23KFFLYSQRSAROZ52Y3UAEO6JAJBTO4WCK46PV3IJUY4L5M
+- **BillVault WASM Hash**: c504b92008ef1c1da3ca51ef561c0b1666bfea114519b06fc4a659518cef458e
 
-### Verified Transaction Hashes
+## Verified Transaction Hashes
 | Action | TX Hash |
 |--------|---------|
-| create_bill | 4d85b4b39d1cd1ca26607085eb799a2628387778523b36fb4379ed7eb40e0605 |
-| mark_paid (inter-contract) | 746eb4f75c44cd97877d3bb10f7f2b727c66220c82a3c8c473d0645075587292 |
+| Factory deploy | b97e498466a9b54aa19625a95fdb67aae6127264f5991db4e3eb230983903f18 |
+| Vault deploy + init + register | c58a204f5a276c541e2c9e3f96e190a59e41132264fd21d8e4e423ba23f45150 |
+| Contribute + cross-contract settle | f3f2b4de6f359b3a23a5f8dc5355eb1664f05a6cd8f3619ac6f6b6b3ed170d4d |
 
----
+## Screenshots
+- `screenshots/1-mobile-responsive.png` — Mobile responsive UI (iPhone 14 Pro)
+- `screenshots/2-test-output.png` — 6 passing tests
+- `screenshots/3-cicd-pipeline.png` — CI/CD green
 
-## 🎯 Why This Wins — Judge's Perspective
+## Criteria Mapping
 
-### What Judges Look For (10 criteria mapped)
-
-| # | Criteria | Split Bill Score | Evidence |
-|---|----------|:---:|-----------|
-| 1 | Advanced smart contract development | 10/10 | 2 contracts with inter-contract calls, obligation token system, authorization + whitelisting |
-| 2 | Inter-contract communication | 10/10 | `env.invoke_contract()` with verified on-chain events from both contracts |
-| 3 | Event streaming & real-time updates | 9/10 | Contract events on all state changes — `bill.created`, `burn`, `bill.paid`, `bill.completed` |
-| 4 | CI/CD pipeline setup | 9/10 | GitHub Actions — contract tests + frontend build green on every push |
-| 5 | Smart contract deployment workflow | 8/10 | `ci.yml` includes deploy jobs (needs GitHub secrets for auto-deploy) |
-| 6 | Mobile responsive frontend | 9/10 | 480px breakpoint, viewport-fit, professional dark theme |
-| 7 | Error handling & loading states | 9/10 | Try/catch everywhere, honeycomb loader, spinner, status bar with TX explorer links |
-| 8 | Writing tests | 10/10 | 26 tests total — contracts cover happy + edge + rejection paths |
-| 9 | Production-ready practices | 9/10 | Persistent keypair, env variables, audit table, validation, Vercel deploy |
-| 10 | Documentation & demo | 9/10 | Architecture diagram, audit table, TX hashes, test output, demo script |
-| | **TOTAL** | **92/100** | |
-
-### The X-Factor: Inter-Contract Communication
-Most Orange Belt submissions deploy 2 contracts that never talk to each other. Split Bill's `mark_paid` function performs a **live inter-contract call** verified on-chain. The Stellar Expert explorer shows two contracts emitting events from a single transaction — this is the gold standard for composability.
-
-### What Could Make It 98/100
-1. Replace deprecated `env.events().publish()` with `#[contractevent]` macro (5 min fix)
-2. Add USDC integration for real-world usability
-3. Add payment link generator (shareable URL for friends to pay)
-
----
-
-## 📸 Screenshot Checklist
-
-| Screenshot | Status | How to Capture |
-|------------|--------|----------------|
-| Mobile responsive UI | ⚠️ | Open `https://frontend-ivory-nine-47.vercel.app` in Chrome → DevTools (⌘⌥I) → Toggle Device Toolbar (⌘⇧M) → iPhone 14 Pro → Screenshot (⌘⇧4) |
-| CI/CD pipeline running | ✅ | Go to https://github.com/yt2025id-lab/stellar-split-bill/actions → Screenshot the green checks |
-| Test output 3+ passing | ✅ | Run `cargo test` in terminal → Screenshot the 12 passed output |
+| # | Criteria | Evidence |
+|---|----------|----------|
+| 1 | Smart contract development | 2 contracts: SplitBillFactory + BillVault with authorization, whitelist, duplicate prevention |
+| 2 | Inter-contract communication | `env.invoke_contract()` — vault calls factory `settle_bill` on full funding |
+| 3 | Event streaming | Contract events on `bill_registered`, `contributed`, `bill_settled` |
+| 4 | CI/CD pipeline | GitHub Actions — contract tests + WASM build + frontend build |
+| 5 | Contract deployment workflow | WASM artifacts built and uploaded in CI |
+| 6 | Mobile responsive frontend | Tailwind 4, dark theme, multi-wallet, responsive |
+| 7 | Error handling | try/catch everywhere, status bar, TX explorer links |
+| 8 | Writing tests | 6 unit tests covering happy + edge + rejection paths |
+| 9 | Production-ready practices | Env vars, persistent keypair, validation, Vercel deploy |
+| 10 | Documentation | Architecture diagram, contract addresses, TX hashes, test output |
