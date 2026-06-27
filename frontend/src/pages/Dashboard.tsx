@@ -48,8 +48,8 @@ async function ensureFunded() {
 }
 
 async function deployVault(salt: Buffer): Promise<string> {
-  const wasmHashHex = Buffer.from(VAULT_WASM, "hex").toString("hex");
-  const wasmXdr = xdr.Hash.fromXDR(wasmHashHex, "hex");
+  const wasmHash = Buffer.from(VAULT_WASM, "hex");
+  const wasmXdr = xdr.Hash.fromXDR(wasmHash.toString("hex"), "hex");
 
   const enc = new TextEncoder();
   const passBytes = enc.encode(Networks.TESTNET);
