@@ -49,7 +49,7 @@ async function ensureFunded() {
 
 async function deployVault(salt: Buffer): Promise<string> {
   const wasmHash = Buffer.from(VAULT_WASM, "hex");
-  const wasmXdr = xdr.Hash.fromXDR(wasmHash.toString("hex"), "hex");
+  const deployerAddr = new Address(appKP.publicKey());
 
   const enc = new TextEncoder();
   const passBytes = enc.encode(Networks.TESTNET);
@@ -60,7 +60,7 @@ async function deployVault(salt: Buffer): Promise<string> {
     new xdr.HashIdPreimageContractId({
       networkId: netId,
       contractIdPreimage: xdr.ContractIdPreimage.contractIdPreimageFromAddress(
-        new xdr.ContractIdPreimageFromAddress({ address: xdr.ScAddress.scAddressTypeContract(wasmXdr), salt })
+        new xdr.ContractIdPreimageFromAddress({ address: deployerAddr.toScAddress(), salt })
       ),
     })
   );
@@ -70,7 +70,7 @@ async function deployVault(salt: Buffer): Promise<string> {
 
   const acct = await server.loadAccount(appKP.publicKey());
   const raw = new TransactionBuilder(acct, { fee: "100000", networkPassphrase: Networks.TESTNET })
-    .addOperation(Operation.createCustomContract({ address: xdr.ScAddress.scAddressTypeContract(wasmXdr), wasmHash, salt }))
+    .addOperation(Operation.createCustomContract({ address: deployerAddr, wasmHash, salt }))
     .setTimeout(300).build();
 
   const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { minResourceFee: string; transactionData: string; error?: string };
@@ -80,7 +80,7 @@ async function deployVault(salt: Buffer): Promise<string> {
   const sd = xdr.SorobanTransactionData.fromXDR(sim.transactionData, "base64");
   const fresh = await server.loadAccount(appKP.publicKey());
   const tx = new TransactionBuilder(fresh, { fee, networkPassphrase: Networks.TESTNET, sorobanData: sd })
-    .addOperation(Operation.createCustomContract({ address: xdr.ScAddress.scAddressTypeContract(wasmXdr), wasmHash, salt }))
+    .addOperation(Operation.createCustomContract({ address: deployerAddr, wasmHash, salt }))
     .setTimeout(300).build();
   tx.sign(appKP);
   const send = await rpcCall("sendTransaction", { transaction: tx.toXDR() }) as unknown as { hash: string; errorResult?: string };
