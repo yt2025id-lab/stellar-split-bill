@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { isConnected, getAddress, requestAccess } from "@stellar/freighter-api";
 import { Horizon, TransactionBuilder, Networks, xdr, Keypair, Operation, Address } from "stellar-sdk";
 
@@ -191,6 +191,8 @@ export default function Dashboard() {
   const [payTx, setPayTx] = useState<TxState>("idle");
   const [status, setStatus] = useState<{ type: string; msg: string; txHash?: string } | null>(null);
   const [showWm, setShowWm] = useState(false);
+  const [showSuccess, setShowSuccess] = useState<{ vaultId: string; title: string; txHash: string } | null>(null);
+  const [sp] = useSearchParams();
 
   useEffect(() => { ensureFunded().then(() => setAppFunded(true)).catch(() => setAppFunded(false)); }, []);
 
@@ -279,6 +281,8 @@ export default function Dashboard() {
         }
       }
       setBills(enriched);
+      const billParam = sp.get("bill");
+      if (billParam) setTimeout(() => document.getElementById(`bill-${billParam}`)?.scrollIntoView({ behavior: "smooth" }), 300);
       setStatus({ type: "success", msg: `Loaded ${enriched.length} bill${enriched.length !== 1 ? "s" : ""}` });
       setPayTx("idle");
     } catch (e: unknown) { setPayTx("fail"); setStatus({ type: "error", msg: (e as Error).message }); }
@@ -325,6 +329,7 @@ export default function Dashboard() {
       setStatus({ type: "success", msg: "Bill created! ", txHash: hash });
       setDesc(""); setTotalXlm(""); setNumPayers(""); setPayerAddrs([]); setPayerShares([]);
       setCreateTx("success"); setTimeout(() => setCreateTx("idle"), 2000);
+      setTimeout(() => setShowSuccess({ vaultId, title: desc, txHash: hash }), 500);
       loadBills();
     } catch (e: unknown) {
       setCreateTx("fail");
@@ -368,6 +373,36 @@ export default function Dashboard() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Wizard Modal */}
+      {showSuccess && (
+        <div className="wallet-modal-overlay" onClick={() => setShowSuccess(null)}>
+          <div className="wallet-modal" onClick={(e) => e.stopPropagation()} style={{ padding: "24px", width: "420px" }}>
+            <div className="wallet-modal-header">
+              <h3>Bill Created!</h3>
+              <button className="wallet-modal-close" onClick={() => setShowSuccess(null)}>&times;</button>
+            </div>
+            <div style={{ padding: "0 0 16px" }}>
+              <p style={{ fontSize: "0.9rem", marginBottom: 12 }}><strong>{showSuccess.title}</strong> is now live on Stellar Testnet.</p>
+              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: 8 }}>
+                <div>Vault: <code style={{ fontSize: "0.65rem" }}>{showSuccess.vaultId}</code></div>
+                <div style={{ marginTop: 4 }}>TX: <a href={`${EXPLORER_BASE}/tx/${showSuccess.txHash}`} target="_blank" rel="noopener" style={{ color: "var(--accent-teal)" }}>{showSuccess.txHash.slice(0, 10)}…{showSuccess.txHash.slice(-6)}</a></div>
+              </div>
+              <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: 16 }}>
+                Share this link with participants so they can connect their wallet and contribute:
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input className="input input-sm" readOnly value={`${window.location.origin}/app?bill=0`} style={{ flex: 1 }} />
+                <button className="btn btn-primary btn-sm" onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/app?bill=0`);
+                  setStatus({ type: "success", msg: "Link copied!" });
+                }}>Copy</button>
+              </div>
+            </div>
+            <button className="btn btn-primary btn-full" onClick={() => setShowSuccess(null)}>OK, Got it</button>
           </div>
         </div>
       )}
@@ -475,8 +510,11 @@ export default function Dashboard() {
             </div>
             {bills.length === 0 ? (
               <div className="empty-state"><p>No bills yet. Click Refresh to load from chain.</p></div>
-            ) : bills.map((b) => (
-              <div key={b.id} className="bill-card">
+            ) : bills.map((b) => {
+              const collected = b.contributions.reduce((s, c) => s + c.amount, 0);
+              const pct = b.participant_count > 0 ? (b.contributions.length / b.participant_count) * 100 : 0;
+              return (
+              <div key={b.id} className="bill-card" id={`bill-${b.id}`}>
                 <div className="bill-card-head">
                   <div className="bill-badge bill-badge-id">#{b.id} · {f(b.vault_id)}</div>
                   <div className={`bill-badge ${b.settled || b.status === "Settled" ? "bill-badge-done" : b.status === "Expired" ? "bill-badge-active" : "bill-badge-active"}`}>
@@ -485,18 +523,18 @@ export default function Dashboard() {
                 </div>
                 <h4 className="bill-title">{b.title}</h4>
                 <div className="bill-meta">
-                  <span>{(b.total_xlm / 1e7).toFixed(4)} XLM total</span>
-                  <span>{b.participant_count} participants</span>
+                  <span>{collected / 1e7}XLM / {(b.total_xlm / 1e7).toFixed(4)} XLM collected</span>
+                  <span>{b.contributions.length}/{b.participant_count} paid</span>
                   <span>by {f(b.creator)}</span>
                 </div>
                 {b.participants.length > 0 && (
-                  <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: 8 }}>
+                  <div style={{ fontSize: "0.7rem", marginBottom: 8, display: "flex", flexWrap: "wrap", gap: "4px 12px" }}>
                     {b.participants.map((p, i) => {
                       const paid = b.contributions.some(c => c.participant === p);
                       const share = b.shares[i] ?? b.total_xlm / b.participant_count;
                       const isMe = p === addr;
                       return (
-                        <span key={i} style={{ marginRight: 12, color: paid ? "var(--success)" : isMe ? "var(--accent-teal)" : "var(--text-muted)" }}>
+                        <span key={i} style={{ color: paid ? "var(--success)" : isMe ? "var(--accent-teal)" : "var(--text-muted)", fontWeight: isMe ? 600 : 400 }}>
                           {paid ? "✓" : "○"} {isMe ? "(you) " : ""}{f(p)}: {share / 1e7}XLM
                         </span>
                       );
@@ -504,21 +542,30 @@ export default function Dashboard() {
                   </div>
                 )}
                 <div className="progress-track">
-                  <div className="progress-fill" style={{ width: `${b.participant_count > 0 ? (b.contributions.length / b.participant_count) * 100 : 0}%` }} />
+                  <div className="progress-fill" style={{ width: `${pct}%` }} />
                 </div>
-                {b.isParticipant && !b.userPaid && !b.settled && b.status !== "Expired" && (
-                  <button onClick={() => contribute(b)} disabled={payTx === "pending"} className="btn btn-accent btn-full btn-sm" style={{ marginTop: 8 }}>
-                    {payTx === "pending" ? "Sending…" : `Contribute — ${(b.userShare / 1e7).toFixed(4)} XLM`}
-                  </button>
-                )}
-                {b.isParticipant && b.userPaid && (
-                  <div style={{ fontSize: "0.75rem", color: "var(--success)", fontWeight: 600, marginTop: 8 }}>✓ You've contributed</div>
-                )}
-                {!b.isParticipant && (
-                  <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: 8 }}>Not a participant in this bill</div>
-                )}
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  {b.isParticipant && !b.userPaid && !b.settled && b.status !== "Expired" && (
+                    <button onClick={() => contribute(b)} disabled={payTx === "pending"} className="btn btn-accent btn-sm" style={{ flex: 1 }}>
+                      {payTx === "pending" ? "Sending…" : `Contribute ${(b.userShare / 1e7).toFixed(4)} XLM`}
+                    </button>
+                  )}
+                  {b.isParticipant && b.userPaid && (
+                    <span style={{ flex: 1, fontSize: "0.75rem", color: "var(--success)", fontWeight: 600, padding: "6px 0" }}>✓ Contributed</span>
+                  )}
+                  {!b.isParticipant && (
+                    <span style={{ flex: 1, fontSize: "0.7rem", color: "var(--text-muted)", padding: "6px 0" }}>Not a participant</span>
+                  )}
+                  <button className="btn btn-ghost btn-xs" onClick={() => {
+                    const url = `${window.location.origin}/app?bill=${b.id}`;
+                    navigator.clipboard.writeText(url);
+                    setStatus({ type: "success", msg: "Share link copied!" });
+                    setTimeout(() => setStatus(null), 2000);
+                  }} title="Copy share link">🔗 Share</button>
+                </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
