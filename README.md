@@ -128,13 +128,14 @@ cargo test
 
 ---
 
-## Transaction Hashes
+## Verified Transaction Hashes
 
 | Action | TX Hash | Explorer |
 |--------|---------|----------|
 | Factory deploy | `b97e498466a9b54aa19625a95fdb67aae6127264f5991db4e3eb230983903f18` | [View](https://stellar.expert/explorer/testnet/tx/b97e498466a9b54aa19625a95fdb67aae6127264f5991db4e3eb230983903f18) |
-| Vault deploy + init + register | `c58a204f5a276c541e2c9e3f96e190a59e41132264fd21d8e4e423ba23f45150` | [View](https://stellar.expert/explorer/testnet/tx/c58a204f5a276c541e2c9e3f96e190a59e41132264fd21d8e4e423ba23f45150) |
-| Contribute + cross-contract settle | `f3f2b4de6f359b3a23a5f8dc5355eb1664f05a6cd8f3619ac6f6b6b3ed170d4d` | [View](https://stellar.expert/explorer/testnet/tx/f3f2b4de6f359b3a23a5f8dc5355eb1664f05a6cd8f3619ac6f6b6b3ed170d4d) |
+| Vault deploy (from WASM hash) | `956c9cb3f91e16270d88961a3d492e0069b4056974deb4a2cf3eea44970c714d` | [View](https://stellar.expert/explorer/testnet/tx/956c9cb3f91e16270d88961a3d492e0069b4056974deb4a2cf3eea44970c714d) |
+| Vault init | `b59e4503ddedd5d73c24b5008bb068ccd897f008bb6fa7b3f3e0b49e055f2ce6` | [View](https://stellar.expert/explorer/testnet/tx/b59e4503ddedd5d73c24b5008bb068ccd897f008bb6fa7b3f3e0b49e055f2ce6) |
+| Register bill (factory) | `30e7ccb895eb932cd20ca39961347f3c25b79d0c9f99f8931997fefaae393559` | [View](https://stellar.expert/explorer/testnet/tx/30e7ccb895eb932cd20ca39961347f3c25b79d0c9f99f8931997fefaae393559) |
 
 ---
 
@@ -147,7 +148,7 @@ cargo test
 | Wallets | Freighter, Albedo, xBull, Rabet |
 | Styling | Tailwind 4 • Dark theme |
 | CI/CD | GitHub Actions |
-| Hosting | Vercel |
+| Hosting | [Vercel](https://frontend-ivory-nine-47.vercel.app) |
 
 ---
 
