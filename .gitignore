@@ -12,3 +12,4 @@ frontend/dist/
 storytelling/node_modules/
 storytelling/.next/
 SPEC.md
+.vite/
