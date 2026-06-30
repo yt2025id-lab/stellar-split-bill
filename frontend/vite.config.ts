@@ -3,9 +3,6 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  resolve: {
-    dedupe: ["@stellar/stellar-base"],
-  },
   define: {
     global: 'globalThis',
   },

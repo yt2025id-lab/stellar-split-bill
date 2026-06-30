@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Env, IntoVal, String, Symbol, Vec, Val,
+    contract, contractimpl, contracttype, token, Address, Env, IntoVal, String, Symbol, Vec, Val,
 };
 
 #[contracttype]
@@ -35,6 +35,7 @@ impl BillVault {
         shares: Vec<i128>,
         title: String,
         total_xlm: i128,
+        native_token: Address,
     ) {
         env.storage().instance().set(&Symbol::new(&env, "factory"), &factory);
         env.storage().instance().set(&Symbol::new(&env, "creator"), &creator);
@@ -45,6 +46,8 @@ impl BillVault {
         env.storage().instance().set(&Symbol::new(&env, "shares"), &shares);
         env.storage().instance().set(&Symbol::new(&env, "contributions"), &Vec::<Contribution>::new(&env));
         env.storage().instance().set(&Symbol::new(&env, "deadline"), &(env.ledger().timestamp() + 7 * 24 * 60 * 60));
+        env.storage().instance().set(&Symbol::new(&env, "withdrawn"), &false);
+        env.storage().instance().set(&Symbol::new(&env, "native_token"), &native_token);
     }
 
     pub fn contribute(env: Env, participant: Address) {
@@ -71,6 +74,12 @@ impl BillVault {
         }
 
         let amount = shares.get(idx).unwrap();
+
+        // Transfer native XLM from participant to vault contract
+        let native: Address = env.storage().instance().get(&Symbol::new(&env, "native_token")).unwrap();
+        let token_client = token::Client::new(&env, &native);
+        token_client.transfer(&participant, &env.current_contract_address(), &amount);
+
         contributions.push_back(Contribution { participant: participant.clone(), amount });
         env.storage().instance().set(&Symbol::new(&env, "contributions"), &contributions);
 
@@ -126,11 +135,38 @@ impl BillVault {
 
         if refund_amount == 0 { panic!("No contribution found"); }
 
+        // Refund the XLM back to the participant
+        let native: Address = env.storage().instance().get(&Symbol::new(&env, "native_token")).unwrap();
+        let token_client = token::Client::new(&env, &native);
+        token_client.transfer(&env.current_contract_address(), &participant, &refund_amount);
+
         env.storage().instance().set(&Symbol::new(&env, "contributions"), &remaining);
 
         env.events().publish(
             (Symbol::new(&env, "refund"), Symbol::new(&env, "issued")),
             (participant, refund_amount),
+        );
+    }
+
+    pub fn withdraw(env: Env, creator: Address) {
+        creator.require_auth();
+        let stored_creator: Address = env.storage().instance().get(&Symbol::new(&env, "creator")).unwrap();
+        if creator != stored_creator { panic!("Only creator can withdraw"); }
+        let settled: bool = env.storage().instance().get(&Symbol::new(&env, "settled")).unwrap_or(false);
+        if !settled { panic!("Bill not yet settled"); }
+        let withdrawn: bool = env.storage().instance().get(&Symbol::new(&env, "withdrawn")).unwrap_or(false);
+        if withdrawn { panic!("Already withdrawn"); }
+        env.storage().instance().set(&Symbol::new(&env, "withdrawn"), &true);
+        let total: i128 = env.storage().instance().get(&Symbol::new(&env, "total_xlm")).unwrap_or(0);
+
+        // Transfer all XLM from vault to creator
+        let native: Address = env.storage().instance().get(&Symbol::new(&env, "native_token")).unwrap();
+        let token_client = token::Client::new(&env, &native);
+        token_client.transfer(&env.current_contract_address(), &creator, &total);
+
+        env.events().publish(
+            (Symbol::new(&env, "withdrawal"), Symbol::new(&env, "claimed")),
+            (creator, total),
         );
     }
 
@@ -146,7 +182,7 @@ impl BillVault {
         env.storage().instance().get(&Symbol::new(&env, "contributions")).unwrap_or(Vec::new(&env))
     }
 
-    pub fn get_details(env: Env) -> (Address, Address, String, i128, u64, Vec<Address>, Vec<i128>) {
+    pub fn get_details(env: Env) -> (Address, Address, String, i128, u64, Vec<Address>, Vec<i128>, bool) {
         let factory: Address = env.storage().instance().get(&Symbol::new(&env, "factory")).unwrap();
         let creator: Address = env.storage().instance().get(&Symbol::new(&env, "creator")).unwrap();
         let title: String = env.storage().instance().get(&Symbol::new(&env, "title")).unwrap();
@@ -154,7 +190,8 @@ impl BillVault {
         let deadline: u64 = env.storage().instance().get(&Symbol::new(&env, "deadline")).unwrap_or(0);
         let participants: Vec<Address> = env.storage().instance().get(&Symbol::new(&env, "participants")).unwrap_or(Vec::new(&env));
         let shares: Vec<i128> = env.storage().instance().get(&Symbol::new(&env, "shares")).unwrap_or(Vec::new(&env));
-        (factory, creator, title, total, deadline, participants, shares)
+        let withdrawn: bool = env.storage().instance().get(&Symbol::new(&env, "withdrawn")).unwrap_or(false);
+        (factory, creator, title, total, deadline, participants, shares, withdrawn)
     }
 }
 

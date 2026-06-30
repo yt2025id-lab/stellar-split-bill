@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { isConnected, getAddress, requestAccess } from "@stellar/freighter-api";
-import { Horizon, TransactionBuilder, Networks, xdr, Keypair, Operation, Address } from "stellar-sdk";
+import { isConnected, getAddress, requestAccess, signTransaction } from "@stellar/freighter-api";
+import { Horizon, TransactionBuilder, Networks, xdr, Keypair, Operation, Address, authorizeEntry } from "stellar-sdk";
 
 const HORIZON_URL = import.meta.env.VITE_HORIZON_URL || "https://horizon-testnet.stellar.org";
 const RPC_URL = import.meta.env.VITE_RPC_URL || "https://soroban-testnet.stellar.org";
 const FACTORY_ID = import.meta.env.VITE_FACTORY_CONTRACT || "CA7R7GECD23KFFLYSQRSAROZ52Y3UAEO6JAJBTO4WCK46PV3IJUY4L5M";
-const VAULT_WASM = import.meta.env.VITE_VAULT_WASM_HASH || "c504b92008ef1c1da3ca51ef561c0b1666bfea114519b06fc4a659518cef458e";
+const VAULT_WASM = import.meta.env.VITE_VAULT_WASM_HASH || "cb2a043f5a07224c24e1a90df9498a48b7ccd36fac745800e3ce66163288d22f";
+const NATIVE_TOKEN = import.meta.env.VITE_NATIVE_TOKEN || "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 const EXPLORER_BASE = "https://stellar.expert/explorer/testnet";
 
 const server = new Horizon.Server(HORIZON_URL);
@@ -20,10 +21,73 @@ const appKP = getOrCreateKeypair();
 
 function scvAddr(a: string): xdr.ScVal { return new Address(a).toScVal(); }
 function scvStr(s: string): xdr.ScVal { return xdr.ScVal.scvString(s); }
-function scvI128(n: bigint): xdr.ScVal { return xdr.ScVal.scvI128(n); }
+function scvI128(n: bigint): xdr.ScVal {
+  return xdr.ScVal.scvI128(new xdr.Int128Parts({
+    hi: new xdr.Int64(BigInt.asIntN(64, n >> 64n)),
+    lo: new xdr.Uint64(BigInt.asUintN(64, n))
+  }));
+}
 function scvU32(n: number): xdr.ScVal { return xdr.ScVal.scvU32(n); }
 function scvVec(items: xdr.ScVal[]): xdr.ScVal { return xdr.ScVal.scvVec(items); }
+function scvBool(v: xdr.ScVal | undefined): boolean {
+  if (!v) return false;
+  try { return v.bool(); } catch {}
+  try { return v.u32() !== 0; } catch {}
+  try { return v.i32() !== 0; } catch {}
+  return false;
+}
 type TxState = "idle" | "pending" | "success" | "fail";
+
+function billFromMap(m: any) {
+  const fields: Record<string, xdr.ScVal> = {};
+  const dec = new TextDecoder();
+  for (let i = 0; i < m.length; i++) {
+    const entry: any = m[i];
+    try {
+      const key = entry.key();
+      const keyStr = typeof key?._value !== "undefined"
+        ? dec.decode(key._value)
+        : key?.str?.()?.toString() ?? "";
+      if (!keyStr) continue;
+      const val = typeof entry.value === "function" ? entry.value() : entry.value;
+      if (!val) continue;
+      fields[keyStr] = val;
+    } catch {}
+  }
+  const addr = (scv: xdr.ScVal | undefined) => { try { return scv ? Address.fromScVal(scv).toString() : ""; } catch { return ""; } };
+  return {
+    vaultId: addr(fields.vault_id),
+    creator: addr(fields.creator),
+    title: fields.title?.str()?.toString() ?? "",
+    totalX: Number(fields.total_xlm?.i128()?.lo ?? 0n),
+    pCount: Number(fields.participant_count?.u32() ?? 0),
+    deadline: Number(fields.deadline?.u64()?.toString() ?? "0"),
+    settled: scvBool(fields.settled),
+  };
+}
+
+function contribFromMap(m: any) {
+  const fields: Record<string, xdr.ScVal> = {};
+  const dec = new TextDecoder();
+  for (let i = 0; i < m.length; i++) {
+    const entry: any = m[i];
+    try {
+      const key = entry.key();
+      const keyStr = typeof key?._value !== "undefined"
+        ? dec.decode(key._value)
+        : key?.str?.()?.toString() ?? "";
+      if (!keyStr) continue;
+      const val = typeof entry.value === "function" ? entry.value() : entry.value;
+      if (!val) continue;
+      fields[keyStr] = val;
+    } catch {}
+  }
+  const addr = (scv: xdr.ScVal | undefined) => { try { return scv ? Address.fromScVal(scv).toString() : ""; } catch { return ""; } };
+  return {
+    participant: addr(fields.participant),
+    amount: Number(fields.amount?.i128()?.lo ?? 0n),
+  };
+}
 
 async function rpcCall(method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
   const r = await fetch(RPC_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
@@ -38,6 +102,7 @@ interface BillInfo {
   total_xlm: number; participant_count: number; deadline: number; settled: boolean;
   participants: string[]; shares: number[]; contributions: Contribution[];
   status: string; isParticipant: boolean; userShare: number; userPaid: boolean;
+  withdrawn: boolean;
 }
 
 async function ensureFunded() {
@@ -73,19 +138,33 @@ async function deployVault(salt: Buffer): Promise<string> {
     .addOperation(Operation.createCustomContract({ address: deployerAddr, wasmHash, salt }))
     .setTimeout(300).build();
 
-  const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { minResourceFee: string; transactionData: string; error?: string };
+  const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { minResourceFee: string; transactionData: string; results?: Array<{ auth?: string[] }>; error?: string };
   if (sim.error) throw new Error(`Vault deploy sim failed: ${sim.error}`);
+
+  const deployAuth: xdr.SorobanAuthorizationEntry[] = [];
+  if (sim.results?.[0]?.auth) {
+    for (const a of sim.results[0].auth) {
+      const entry = xdr.SorobanAuthorizationEntry.fromXDR(a, "base64");
+      deployAuth.push(await authorizeEntry(entry, appKP, Networks.TESTNET));
+    }
+  }
 
   const fee = (parseInt(raw.fee, 10) + parseInt(sim.minResourceFee || "0", 10)).toString();
   const sd = xdr.SorobanTransactionData.fromXDR(sim.transactionData, "base64");
   const fresh = await server.loadAccount(appKP.publicKey());
   const tx = new TransactionBuilder(fresh, { fee, networkPassphrase: Networks.TESTNET, sorobanData: sd })
-    .addOperation(Operation.createCustomContract({ address: deployerAddr, wasmHash, salt }))
+    .addOperation(Operation.createCustomContract({ address: deployerAddr, wasmHash, salt, auth: deployAuth.length > 0 ? deployAuth : undefined }))
     .setTimeout(300).build();
   tx.sign(appKP);
   const send = await rpcCall("sendTransaction", { transaction: tx.toXDR() }) as unknown as { hash: string; errorResult?: string };
   if (send.errorResult) throw new Error(`Vault deploy failed: ${send.errorResult}`);
-  return vaultId.toString();
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const st = await rpcCall("getTransaction", { hash: send.hash }) as { status: string };
+    if (st.status === "SUCCESS") return vaultId.toString();
+    if (st.status === "FAILED") throw new Error("Vault deploy failed: " + JSON.stringify((st as Record<string, unknown>).result ?? st));
+  }
+  throw new Error("Vault deploy timed out");
 }
 
 async function simSignSend(contractId: string, func: string, args: xdr.ScVal[], needAuth: boolean): Promise<{ hash: string; retval?: xdr.ScVal }> {
@@ -95,11 +174,16 @@ async function simSignSend(contractId: string, func: string, args: xdr.ScVal[], 
     .addOperation(Operation.invokeContractFunction({ contract: contractId, function: func, args }))
     .setTimeout(300).build();
 
-  const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { minResourceFee: string; transactionData: string; result?: { auth?: string[]; retval?: string }; error?: string };
+  const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { minResourceFee: string; transactionData: string; results?: Array<{ auth?: string[]; xdr?: string }>; error?: string };
   if (sim.error) throw new Error(`Sim failed: ${sim.error}`);
 
   const auth: xdr.SorobanAuthorizationEntry[] = [];
-  if (sim.result?.auth) for (const a of sim.result.auth) auth.push(xdr.SorobanAuthorizationEntry.fromXDR(a, "base64"));
+  if (sim.results?.[0]?.auth) {
+    for (const a of sim.results[0].auth) {
+      const entry = xdr.SorobanAuthorizationEntry.fromXDR(a, "base64");
+      auth.push(await authorizeEntry(entry, appKP, Networks.TESTNET));
+    }
+  }
 
   const fee = (parseInt(raw.fee, 10) + parseInt(sim.minResourceFee || "0", 10)).toString();
   const sd = xdr.SorobanTransactionData.fromXDR(sim.transactionData, "base64");
@@ -109,67 +193,125 @@ async function simSignSend(contractId: string, func: string, args: xdr.ScVal[], 
     .setTimeout(300).build();
   tx.sign(appKP);
 
-  const send = await rpcCall("sendTransaction", { transaction: tx.toXDR() }) as unknown as { hash: string; errorResult?: string };
+  const send = await rpcCall("sendTransaction", { transaction: tx.toXDR() }) as unknown as { hash?: string; status?: string; errorResult?: string };
+  if (!send.hash) throw new Error(`TX send failed: ${JSON.stringify(send)}`);
   if (send.errorResult) throw new Error(`TX failed: ${send.errorResult}`);
-  let retval: xdr.ScVal | undefined;
-  if (sim.result?.retval) { try { retval = xdr.ScVal.fromXDR(sim.result.retval, "base64"); } catch {} }
-  return { hash: send.hash, retval };
+  for (let i = 0; i < 60; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const st = await rpcCall("getTransaction", { hash: send.hash }) as { status: string; resultXdr?: string };
+    if (st.status === "SUCCESS") {
+      let retval: xdr.ScVal | undefined;
+      if (sim.results?.[0]?.xdr) { try { retval = xdr.ScVal.fromXDR(sim.results[0].xdr, "base64"); } catch {} }
+      return { hash: send.hash, retval };
+    }
+    if (st.status === "FAILED") throw new Error(`${func} failed: ` + JSON.stringify((st as Record<string, unknown>).result ?? st));
+  }
+  throw new Error(`${func} timed out (last status: ${send.status || "unknown"})`);
 }
 
-async function readVault(vaultId: string): Promise<{ participants: string[]; shares: number[]; contributions: Contribution[]; status: string } | null> {
+async function simSignSendFreighter(contractId: string, func: string, args: xdr.ScVal[], addr: string): Promise<{ hash: string }> {
+  await ensureFunded();
+  const acct = await server.loadAccount(appKP.publicKey());
+  const raw = new TransactionBuilder(acct, { fee: "100000", networkPassphrase: Networks.TESTNET })
+    .addOperation(Operation.invokeContractFunction({ contract: contractId, function: func, args }))
+    .setTimeout(300).build();
+
+  const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { minResourceFee: string; transactionData: string; results?: Array<{ auth?: string[] }>; error?: string };
+  if (sim.error) throw new Error(`Sim failed: ${sim.error}`);
+
+  const auth: xdr.SorobanAuthorizationEntry[] = [];
+  if (sim.results?.[0]?.auth) {
+    for (const a of sim.results[0].auth) {
+      const entry = xdr.SorobanAuthorizationEntry.fromXDR(a, "base64");
+      auth.push(await authorizeEntry(entry, appKP, Networks.TESTNET));
+    }
+  }
+
+  const fee = (parseInt(raw.fee, 10) + parseInt(sim.minResourceFee || "0", 10)).toString();
+  const sd = xdr.SorobanTransactionData.fromXDR(sim.transactionData, "base64");
+  const fresh = await server.loadAccount(appKP.publicKey());
+  const tx = new TransactionBuilder(fresh, { fee, networkPassphrase: Networks.TESTNET, sorobanData: sd })
+    .addOperation(Operation.invokeContractFunction({ contract: contractId, function: func, args, auth: auth.length > 0 ? auth : undefined }))
+    .setTimeout(300).build();
+
+  const signedXdr = await signTransaction(tx.toXDR(), { networkPassphrase: Networks.TESTNET, accountToSign: addr });
+  const send = await rpcCall("sendTransaction", { transaction: signedXdr }) as unknown as { hash?: string; status?: string; errorResult?: string };
+  if (!send.hash) throw new Error(`TX send failed: ${JSON.stringify(send)}`);
+  if (send.errorResult) throw new Error(`TX failed: ${send.errorResult}`);
+  for (let i = 0; i < 60; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const st = await rpcCall("getTransaction", { hash: send.hash }) as { status: string };
+    if (st.status === "SUCCESS") return { hash: send.hash };
+    if (st.status === "FAILED") throw new Error(`${func} failed: ` + JSON.stringify(st));
+  }
+  throw new Error(`${func} timed out`);
+}
+
+async function readVault(vaultId: string): Promise<{
+  creator: string; title: string; total_xlm: number; deadline: number;
+  participants: string[]; shares: number[]; contributions: Contribution[];
+  status: string; withdrawn: boolean;
+} | null> {
   try {
     const acct = await server.loadAccount(appKP.publicKey());
+
+    // get_details returns (factory, creator, title, total, deadline, participants, shares, withdrawn)
     const raw = new TransactionBuilder(acct, { fee: "100", networkPassphrase: Networks.TESTNET })
       .addOperation(Operation.invokeContractFunction({ contract: vaultId, function: "get_details", args: [] }))
       .setTimeout(300).build();
-    const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { result?: { retval?: string }; error?: string };
-    if (sim.error || !sim.result?.retval) return null;
-    const rv = xdr.ScVal.fromXDR(sim.result.retval, "base64");
-    const fields = rv.vec()!;
-    const parts: string[] = [];
-    for (let i = 5; i < 7; i++) {
-      if (fields[i]) {
-        const vec = fields[i].vec();
-        if (vec) {
-          const arr: string[] = [];
-          for (const v of vec) {
-            const a = v.address()?.toString();
-            arr.push(a ?? v.i128()?.lo?.toString() ?? "0");
-          }
-          parts.push(arr.join(","));
-        }
-      }
-    }
+    const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { results?: Array<{ xdr?: string }>; error?: string };
+    if (sim.error || !sim.results?.[0]?.xdr) return null;
+    const rv = xdr.ScVal.fromXDR(sim.results[0].xdr, "base64");
+    let fields: xdr.ScVal[];
+    try { fields = rv.vec(); } catch {}
+    if (!fields) return null;
+    const creator = Address.fromScVal(fields[1]).toString();
+    const title = fields[2]?.str()?.toString() ?? "";
+    const total = Number(fields[3]?.i128()?.lo ?? 0n);
+    const deadline = Number(fields[4]?.u64()?.toString() ?? "0");
+    const withdrawn = scvBool(fields[7]);
 
-    // get status
+    const participants: string[] = [];
+    if (fields[5]) { let vec; try { vec = fields[5].vec(); } catch {} if (vec) for (const v of vec) { try { participants.push(Address.fromScVal(v).toString()); } catch {} } }
+    const shares: number[] = [];
+    if (fields[6]) { let vec; try { vec = fields[6].vec(); } catch {} if (vec) for (const v of vec) { shares.push(Number(v.i128()?.lo ?? 0n)); } }
+
+    // get_status
     const raw2 = new TransactionBuilder(acct, { fee: "100", networkPassphrase: Networks.TESTNET })
       .addOperation(Operation.invokeContractFunction({ contract: vaultId, function: "get_status", args: [] }))
       .setTimeout(300).build();
-    const sim2 = await rpcCall("simulateTransaction", { transaction: raw2.toXDR() }) as unknown as { result?: { retval?: string }; error?: string };
+    const sim2 = await rpcCall("simulateTransaction", { transaction: raw2.toXDR() }) as unknown as { results?: Array<{ xdr?: string }>; error?: string };
     let status = "Unknown";
-    if (sim2.result?.retval) {
-      const sv = xdr.ScVal.fromXDR(sim2.result.retval, "base64");
+    if (sim2.results?.[0]?.xdr) {
+      const sv = xdr.ScVal.fromXDR(sim2.results[0].xdr, "base64");
       const raw = sv.str()?.toString() ?? sv.u32()?.toString() ?? String(sv.vec()?.[0]?.str()?.toString() ?? "");
       status = raw === "0" || raw === "Pending" ? "Pending" : raw === "1" || raw === "Settled" ? "Settled" : raw === "2" || raw === "Expired" ? "Expired" : raw;
     }
 
-    // get contributions
+    // get_contributions
     const raw3 = new TransactionBuilder(acct, { fee: "100", networkPassphrase: Networks.TESTNET })
       .addOperation(Operation.invokeContractFunction({ contract: vaultId, function: "get_contributions", args: [] }))
       .setTimeout(300).build();
-    const sim3 = await rpcCall("simulateTransaction", { transaction: raw3.toXDR() }) as unknown as { result?: { retval?: string }; error?: string };
+    const sim3 = await rpcCall("simulateTransaction", { transaction: raw3.toXDR() }) as unknown as { results?: Array<{ xdr?: string }>; error?: string };
     const contribs: Contribution[] = [];
-    if (sim3.result?.retval) {
-      const cv = xdr.ScVal.fromXDR(sim3.result.retval, "base64");
+    if (sim3.results?.[0]?.xdr) {
+      const cv = xdr.ScVal.fromXDR(sim3.results[0].xdr, "base64");
       const vec = cv.vec();
       if (vec) for (const v of vec) {
-        const fv = v.vec(); if (fv) contribs.push({ participant: fv[0]?.address()?.toString() ?? "", amount: Number(fv[1]?.i128()?.lo ?? 0n) });
+        let fv; try { fv = v.vec(); } catch {}
+        if (fv) {
+          let pa = ""; try { pa = Address.fromScVal(fv[0]).toString(); } catch {} contribs.push({ participant: pa, amount: Number(fv[1]?.i128()?.lo ?? 0n) });
+        } else {
+          let mv; try { mv = v.map(); } catch {}
+          if (mv) {
+            const cm = contribFromMap(mv);
+            contribs.push({ participant: cm.participant, amount: cm.amount });
+          }
+        }
       }
     }
 
-    const participants = parts[0] ? parts[0].split(",") : [];
-    const shares = parts[1] ? parts[1].split(",").map(Number) : [];
-    return { participants, shares, contributions: contribs, status };
+    return { creator, title, total_xlm: total, deadline, participants, shares, contributions: contribs, status, withdrawn };
   } catch { return null; }
 }
 
@@ -207,6 +349,41 @@ export default function Dashboard() {
   }, []);
   useEffect(() => { if (addr) fetchBal(addr); }, [addr, fetchBal]);
 
+  // Load bills: ?vault=VAULT_ID → load single vault directly, else load all from factory
+  const vaultParam = sp.get("vault");
+  useEffect(() => {
+    if (vaultParam) {
+      loadVaultBill(vaultParam);
+    } else if (addr) {
+      loadBills();
+    }
+  }, [addr, vaultParam]);
+
+  const loadVaultBill = async (vaultId: string) => {
+    setPayTx("pending"); setStatus(null);
+    try {
+      await ensureFunded();
+      const data = await readVault(vaultId);
+      if (!data) throw new Error("Failed to load bill from vault");
+      const isP = addr ? data.participants.includes(addr) : false;
+      const idx = isP ? data.participants.indexOf(addr!) : -1;
+      const userS = idx >= 0 ? (data.shares[idx] ?? data.total_xlm / data.participants.length) : data.total_xlm / data.participants.length;
+      const userPd = data.contributions.some(c => c.participant === addr);
+      const bill: BillInfo = {
+        id: 0, vault_id: vaultId, creator: data.creator, title: data.title,
+        total_xlm: data.total_xlm, participant_count: data.participants.length,
+        deadline: data.deadline, settled: data.status === "Settled",
+        participants: data.participants, shares: data.shares,
+        contributions: data.contributions, status: data.status,
+        isParticipant: isP, userShare: userS, userPaid: userPd,
+        withdrawn: data.withdrawn,
+      };
+      setBills([bill]);
+      setPayTx("idle");
+      setStatus({ type: "success", msg: "Bill loaded from share link!" });
+    } catch (e: unknown) { setPayTx("fail"); setStatus({ type: "error", msg: (e as Error).message }); }
+  };
+
   const connectWallet = async (walletId: string) => {
     try {
       if (walletId === "freighter") {
@@ -243,29 +420,38 @@ export default function Dashboard() {
       const raw = new TransactionBuilder(acct, { fee: "100", networkPassphrase: Networks.TESTNET })
         .addOperation(Operation.invokeContractFunction({ contract: FACTORY_ID, function: "get_bills", args: [] }))
         .setTimeout(300).build();
-      const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { result?: { retval?: string }; error?: string };
+      const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { results?: Array<{ xdr?: string }>; error?: string };
       if (sim.error) throw new Error(`Load failed: ${sim.error}`);
 
       const enriched: BillInfo[] = [];
-      if (sim.result?.retval) {
-        const rv = xdr.ScVal.fromXDR(sim.result.retval, "base64"); const vec = rv.vec();
+      if (sim.results?.[0]?.xdr) {
+        const rv = xdr.ScVal.fromXDR(sim.results[0].xdr, "base64"); const vec = rv.vec();
         if (vec) {
           for (let i = 0; i < vec.length; i++) {
-            const f = vec[i].vec();
-            if (!f) continue;
-            const vaultId = f[0].address()?.toString() ?? "";
-            const creator = f[1].address()?.toString() ?? "";
-            const title = f[2].str()?.toString() ?? "";
-            const totalX = Number(f[3].i128()?.lo ?? 0n);
-            const pCount = Number(f[4].u32());
-            const deadline = Number(f[5].u64()?.toString() ?? "0");
-            const settled = f[6].bool() ?? false;
+            let f, m; try { f = vec[i].vec(); } catch {}
+            if (!f) try { m = vec[i].map(); } catch {}
+            if (!f && !m) continue;
+            let vaultId: string, creator: string, title: string, totalX: number, pCount: number, deadline: number, settled: boolean;
+            if (f) {
+              try { vaultId = Address.fromScVal(f[0]).toString(); } catch { vaultId = ""; }
+              try { creator = Address.fromScVal(f[1]).toString(); } catch { creator = ""; }
+              title = f[2]?.str()?.toString() ?? "";
+              totalX = Number(f[3]?.i128()?.lo ?? 0n);
+              pCount = Number(f[4]?.u32());
+              deadline = Number(f[5]?.u64()?.toString() ?? "0");
+              settled = scvBool(f[6]);
+            } else {
+              const bm = billFromMap(m);
+              vaultId = bm.vaultId; creator = bm.creator; title = bm.title;
+              totalX = bm.totalX; pCount = bm.pCount; deadline = bm.deadline; settled = bm.settled;
+            }
 
             const vaultData = await readVault(vaultId);
             const parts = vaultData?.participants ?? [];
             const shares = vaultData?.shares ?? [];
             const contribs = vaultData?.contributions ?? [];
             const vStatus = vaultData?.status ?? (settled ? "Settled" : "Pending");
+            const withdrawn = vaultData?.withdrawn ?? false;
             const isP = addr ? parts.includes(addr) : false;
             const idx = isP ? parts.indexOf(addr!) : -1;
             const userS = idx >= 0 ? (shares[idx] ?? totalX / pCount) : totalX / pCount;
@@ -276,6 +462,7 @@ export default function Dashboard() {
               participant_count: pCount, deadline, settled: settled || vStatus === "Settled",
               participants: parts, shares, contributions: contribs,
               status: vStatus, isParticipant: isP, userShare: userS, userPaid: userPd,
+              withdrawn,
             });
           }
         }
@@ -316,15 +503,15 @@ export default function Dashboard() {
       await simSignSend(vaultId, "init", [
         scvAddr(FACTORY_ID), scvAddr(appKP.publicKey()),
         scvVec(addrs.map((a) => scvAddr(a))), scvVec(shares.map((s) => scvI128(s))),
-        scvStr(desc), scvI128(BigInt(totalXlm)),
+        scvStr(desc), scvI128(BigInt(totalXlm)), scvAddr(NATIVE_TOKEN),
       ], false);
 
       setStatus({ type: "pending", msg: "Registering in factory..." });
       const { hash } = await simSignSend(FACTORY_ID, "register_bill", [
-        scvAddr(vaultId), scvAddr(addr ?? appKP.publicKey()),
+        scvAddr(vaultId), scvAddr(appKP.publicKey()),
         scvVec(addrs.map((a) => scvAddr(a))), scvVec(shares.map((s) => scvI128(s))),
         scvStr(desc),
-      ], !!addr);
+      ], false);
 
       setStatus({ type: "success", msg: "Bill created! ", txHash: hash });
       setDesc(""); setTotalXlm(""); setNumPayers(""); setPayerAddrs([]); setPayerShares([]);
@@ -342,8 +529,19 @@ export default function Dashboard() {
     if (!addr) return setStatus({ type: "error", msg: "Connect wallet to contribute." });
     setPayTx("pending"); setStatus(null);
     try {
-      const { hash } = await simSignSend(b.vault_id, "contribute", [scvAddr(addr)], true);
+      const { hash } = await simSignSendFreighter(b.vault_id, "contribute", [scvAddr(addr)], addr);
       setStatus({ type: "success", msg: `Contributed ${(b.userShare / 1e7).toFixed(4)} XLM! `, txHash: hash });
+      setPayTx("success"); setTimeout(() => setPayTx("idle"), 2000);
+      loadBills();
+    } catch (e: unknown) { setPayTx("fail"); setStatus({ type: "error", msg: (e as Error).message }); }
+  };
+
+  const claimBill = async (b: BillInfo) => {
+    if (!addr) return setStatus({ type: "error", msg: "Connect wallet to claim." });
+    setPayTx("pending"); setStatus(null);
+    try {
+      const { hash } = await simSignSendFreighter(b.vault_id, "withdraw", [scvAddr(addr)], addr);
+      setStatus({ type: "success", msg: `Claimed ${(b.total_xlm / 1e7).toFixed(4)} XLM from vault! `, txHash: hash });
       setPayTx("success"); setTimeout(() => setPayTx("idle"), 2000);
       loadBills();
     } catch (e: unknown) { setPayTx("fail"); setStatus({ type: "error", msg: (e as Error).message }); }
@@ -395,9 +593,9 @@ export default function Dashboard() {
                 Share this link with participants so they can connect their wallet and contribute:
               </p>
               <div style={{ display: "flex", gap: 8 }}>
-                <input className="input input-sm" readOnly value={`${window.location.origin}/app?bill=0`} style={{ flex: 1 }} />
+                <input className="input input-sm" readOnly value={`${window.location.origin}/app?vault=${showSuccess.vaultId}`} style={{ flex: 1 }} />
                 <button className="btn btn-primary btn-sm" onClick={() => {
-                  navigator.clipboard.writeText(`${window.location.origin}/app?bill=0`);
+                  navigator.clipboard.writeText(`${window.location.origin}/app?vault=${showSuccess.vaultId}`);
                   setStatus({ type: "success", msg: "Link copied!" });
                 }}>Copy</button>
               </div>
@@ -502,7 +700,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        {addr && (
+        {(addr || vaultParam) && (
           <div className="card card-full">
             <div className="dapp-card-header">
               <h3 className="guide-title" style={{ marginBottom: 0 }}>Bills</h3>
@@ -553,11 +751,19 @@ export default function Dashboard() {
                   {b.isParticipant && b.userPaid && (
                     <span style={{ flex: 1, fontSize: "0.75rem", color: "var(--success)", fontWeight: 600, padding: "6px 0" }}>✓ Contributed</span>
                   )}
-                  {!b.isParticipant && (
+                  {!b.isParticipant && !b.withdrawn && (
                     <span style={{ flex: 1, fontSize: "0.7rem", color: "var(--text-muted)", padding: "6px 0" }}>Not a participant</span>
                   )}
+                  {addr === b.creator && b.settled && !b.withdrawn && (
+                    <button onClick={() => claimBill(b)} disabled={payTx === "pending"} className="btn btn-primary btn-sm" style={{ flex: 1 }}>
+                      {payTx === "pending" ? "Claiming…" : `Claim ${(b.total_xlm / 1e7).toFixed(4)} XLM`}
+                    </button>
+                  )}
+                  {b.withdrawn && (
+                    <span style={{ flex: 1, fontSize: "0.75rem", color: "var(--accent-teal)", fontWeight: 600, padding: "6px 0" }}>✓ Claimed</span>
+                  )}
                   <button className="btn btn-ghost btn-xs" onClick={() => {
-                    const url = `${window.location.origin}/app?bill=${b.id}`;
+                    const url = `${window.location.origin}/app?vault=${b.vault_id}`;
                     navigator.clipboard.writeText(url);
                     setStatus({ type: "success", msg: "Share link copied!" });
                     setTimeout(() => setStatus(null), 2000);

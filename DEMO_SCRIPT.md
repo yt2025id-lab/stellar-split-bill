@@ -1,116 +1,64 @@
-# 🎬 Demo Video Script — Split Bill (Orange Belt)
-## Durasi: 1 menit 45 detik | Narator: Ozan_OnChain
+# Demo Video Script — Split Bill (Orange Belt)
+## Duration: ~1:30 | Language: English or Bahasa
 
 ---
 
-### SCENE 1 — HOOK (0:00 - 0:12)
-**[Screen: Split Bill dApp hero — 3D sphere + orange gradient]**
+### SCENE 1 — HOOK (0:00 - 0:10)
+**[Screen: Split Bill dApp landing page — dark theme with gradient]**
 
-> "Berapa kali kamu dengar 'Bro, nanti gue transfer ya' — lalu 2 hari kemudian masih belum?
-> Split Bill is a decentralized bill-splitting protocol on Stellar Soroban.
-> No awkward math. No chasing friends. Just smart contracts that settle everything."
-
-**[Transisi: fade ke arsitektur diagram]**
+> "Pernah traktir temen tapi susah nagih? Split Bill is a decentralized bill-splitting protocol on Stellar Soroban. Create a bill, invite friends, and collect XLM directly on-chain."
 
 ---
 
-### SCENE 2 — ARCHITECTURE (0:12 - 0:30)
-**[Screen: README architecture section — dua kontrak + panah inter-contract]**
+### SCENE 2 — ARCHITECTURE (0:10 - 0:25)
+**[Screen: README architecture section — Factory + Vault diagram]**
 
-> "Two smart contracts power this. Split Token mints obligation tokens for every payer.
-> Split Core manages bills — and when you mark yourself as paid,
-> it calls Split Token to burn your obligation tokens. Automatically. On-chain.
-> This is true inter-contract communication — not just two deployed contracts, but one calling the other atomically."
+> "Two smart contracts. SplitBillFactory manages bill registration. Each bill gets its own BillVault contract. When all participants have paid, the vault automatically calls the factory to settle — inter-contract communication in one transaction."
 
-**[Highlight: kode `env.invoke_contract(&token_addr, &symbol_short!("burn")...)`]**
-
-> "Here in Rust — split-core calls split-token's burn function.
-> Both contracts emit events in a single transaction. Verified. Composable."
+**[Highlight: env.invoke_contract code]**
 
 ---
 
-### SCENE 3 — LIVE DEMO (0:30 - 0:55)
-**[Screen: Live demo di frontend-ivory-nine-47.vercel.app]**
+### SCENE 3 — TESTS (0:25 - 0:40)
+**[Screen: Terminal — cargo test output]**
 
-> "Let me show you the live dApp."
-
-**[Klik "Connect Freighter"]**
-
-> "Connecting with Freighter wallet. The dApp generates a persistent keypair stored in localStorage —
-> no seed phrase exposure. Funded automatically via Friendbot."
-
-**[Isi form: Description "Pizza Party", Amount "200", Payers "2", masukkan 2 alamat Stellar]**
-
-> "Creating a bill for 200 stroops split between 2 friends.
-> Notice the client-side validation — amount must be evenly divisible, addresses must be valid 56-char Stellar format.
-> The contract enforces the same rules on-chain."
-
-**[Klik "Create Bill" → muncul status bar hijau dengan TX hash + link explorer]**
-
-> "Bill created. Here's the transaction hash — one click to verify on Stellar Expert."
+> "6 smart contract tests pass — factory tests for creating and settling bills, vault tests for contributions, double-payment rejection, and non-participant authorization. CI/CD via GitHub Actions runs these tests on every push."
 
 ---
 
-### SCENE 4 — INTER-CONTRACT MAGIC (0:55 - 1:15)
-**[Screen: Buka Stellar Expert — tunjukkan TX `746eb4f7...`]**
+### SCENE 4 — LIVE DEMO (0:40 - 1:10)
+**[Screen: Live dApp at frontend-ivory-nine-47.vercel.app]**
 
-> "Now the magic. When I mark myself as paid..."
+> "Let me show you the live dApp. I'll connect my Freighter wallet..."
 
-**[Klik "Mark Paid" pada bill #1]**
+**[Connect wallet → Create bill form]**
 
-> "The transaction emits events from BOTH contracts. Look — split-token fires a 'burn' event, and split-core fires 'bill.paid'.
-> This is inter-contract communication, verified on the Stellar ledger.
-> 50 stroops burned from my obligation tokens. No one can fake a payment. No one can pay twice."
+> "Create a bill — enter title, total XLM, number of payers, and their Stellar addresses."
 
----
+**[Fill form → Click "Create Bill" → Success modal appears]**
 
-### SCENE 5 — CI/CD + TESTS (1:15 - 1:30)
-**[Screen: GitHub Actions — workflow hijau: Smart Contract Tests ✓ + Frontend Build ✓]**
+> "The bill is created. A vault contract is deployed dynamically, initialized, and registered in the factory — all in under 30 seconds. Here's the share link to send to friends."
 
-> "Every push triggers CI/CD on GitHub Actions. 12 smart contract tests run automatically —
-> covering create, mark_paid, inter-contract burn, double payment rejection, unauthorized access.
-> All green. Plus 14 frontend tests for the storytelling landing page. 26 tests total."
+**[Click contribute on another bill]**
+
+> "Participants connect their wallets and contribute their share. When everyone has paid, the vault calls the factory to settle, and the creator receives the total XLM."
 
 ---
 
-### SCENE 6 — MOBILE + ERROR HANDLING (1:30 - 1:40)
-**[Screen: Chrome DevTools iPhone 14 Pro — dApp dalam mode mobile]**
+### SCENE 5 — CLOSING (1:10 - 1:30)
+**[Screen: GitHub repo with all items]**
 
-> "Fully mobile responsive with a 480px breakpoint. Professional Web3 dark theme.
-> Loading states: honeycomb loader while fetching, spinner during transactions.
-> Error handling: every action wrapped in try/catch with clear user feedback."
+> "34 commits. 6 tests. CI/CD green. Deployed to Vercel. Inter-contract communication verified on-chain. Split Bill — decentralized bill splitting on Stellar Soroban."
 
 ---
 
-### SCENE 7 — CLOSING (1:40 - 1:45)
-**[Screen: README — badge tests 12 passed, GitHub stars]**
-
-> "Split Bill. Decentralized bill splitting on Stellar Soroban.
-> 30 commits. Inter-contract communication. 26 tests. CI/CD green. Ready for mainnet.
-> Thank you."
-
----
-
-## 📋 Shot List (untuk referensi perekaman)
+## Shot List
 
 | # | Scene | Duration | Screen |
 |---|-------|----------|--------|
-| 1 | Hook + value proposition | 12s | Hero section dApp |
-| 2 | Architecture + inter-contract code | 18s | README architecture section |
-| 3 | Live demo: connect + create bill | 25s | Live dApp |
-| 4 | Inter-contract burn + Stellar Expert | 20s | Stellar Expert explorer |
-| 5 | CI/CD + tests passing | 15s | GitHub Actions |
-| 6 | Mobile responsive + error handling | 10s | Chrome DevTools mobile view |
-| 7 | Closing statement | 5s | README |
-| **Total** | | **1m45s** | |
-
----
-
-## 🎯 Tips Perekaman
-
-1. **Rekam di 1080p** — gunakan OBS atau QuickTime Screen Recording
-2. **Zoom in** pada kode inter-contract (`env.invoke_contract`) — ini pembeda utama
-3. **Pause sejenak** di Stellar Expert saat tunjukkan 2 event dalam 1 TX — beri waktu juri mencerna
-4. **Highlight cursor** (OBS plugin atau Mouseposé) — supaya juri bisa ikuti klik-mu
-5. **Audio clear** — gunakan mic eksternal, bukan laptop mic
-6. **Upload ke YouTube unlisted atau Google Drive** — cantumkan link di submission
+| 1 | Hook + value prop | 10s | Landing page |
+| 2 | Architecture + inter-contract code | 15s | README architecture |
+| 3 | Tests + CI/CD | 15s | Terminal + GitHub Actions |
+| 4 | Live demo | 30s | Live dApp |
+| 5 | Closing | 20s | GitHub repo |
+| **Total** | | **1m30s** | |

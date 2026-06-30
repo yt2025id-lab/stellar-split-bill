@@ -6,7 +6,7 @@
 
 Two smart contracts communicating via inter-contract calls on Stellar Testnet.
 
-[![Tests](https://img.shields.io/badge/tests-6%20passed-brightgreen)](https://github.com/yt2025id-lab/stellar-split-bill/actions)
+[![Tests](https://img.shields.io/badge/tests-7%20passed-brightgreen)](https://github.com/yt2025id-lab/stellar-split-bill/actions)
 [![Soroban](https://img.shields.io/badge/soroban-sdk%20v22-blue)](https://soroban.stellar.org)
 [![React](https://img.shields.io/badge/react-19-61DAFB)](https://react.dev)
 [![License](https://img.shields.io/badge/license-MIT-purple)](LICENSE)
@@ -93,10 +93,11 @@ One vault contract deployed per bill:
 | Function | Description |
 |----------|-------------|
 | `__constructor()` | No-arg constructor for `env.register()` |
-| `init(factory, id, creator, participants, shares, deadline)` | Initialize vault |
+| `init(factory, id, creator, participants, shares, total, native_token)` | Initialize vault with native XLM token address |
 | `contribute(participant)` | Contribute share amount |
 | `refund(participant)` | Refund if deadline passed |
-| `get_details()` | Get bill details (participants, shares, total) |
+| `withdraw(creator)` | Creator claims total XLM after settlement |
+| `get_details()` | Get bill details (participants, shares, total, withdrawn) |
 | `get_status()` | Get current status |
 | `get_contributions()` | Get individual contributions |
 
@@ -105,11 +106,12 @@ One vault contract deployed per bill:
 ## Test Coverage
 
 ```
-SplitBillFactory (2 tests)          BillVault (4 tests)
+SplitBillFactory (2 tests)          BillVault (5 tests)
 ├── test_create_and_list_bills  ✅  ├── test_contribute_and_settle  ✅
 └── test_settle_bill            ✅  ├── test_partial_contribution   ✅
                                     ├── test_double_contribute     ✅
-                                    └── test_non_participant       ✅
+                                    ├── test_non_participant       ✅
+                                    └── test_withdraw_after_settle ✅
 ```
 
 Run tests:
@@ -124,7 +126,7 @@ cargo test
 | Contract | Address / Hash | Network |
 |----------|---------------|---------|
 | SplitBillFactory | [`CA7R7GECD23KFFLYSQRSAROZ52Y3UAEO6JAJBTO4WCK46PV3IJUY4L5M`](https://stellar.expert/explorer/testnet/contract/CA7R7GECD23KFFLYSQRSAROZ52Y3UAEO6JAJBTO4WCK46PV3IJUY4L5M) | Testnet |
-| BillVault WASM | `c504b92008ef1c1da3ca51ef561c0b1666bfea114519b06fc4a659518cef458e` | Testnet |
+| BillVault WASM | `cb2a043f5a07224c24e1a90df9498a48b7ccd36fac745800e3ce66163288d22f` | Testnet |
 
 ---
 
@@ -149,6 +151,7 @@ cargo test
 | Styling | Tailwind 4 • Dark theme |
 | CI/CD | GitHub Actions |
 | Hosting | [Vercel](https://frontend-ivory-nine-47.vercel.app) |
+| Native XLM | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 
 ---
 
@@ -176,7 +179,8 @@ npm run dev        # → http://localhost:3001
 ```bash
 # frontend/.env
 VITE_FACTORY_CONTRACT=CA7R7GECD23KFFLYSQRSAROZ52Y3UAEO6JAJBTO4WCK46PV3IJUY4L5M
-VITE_VAULT_WASM_HASH=c504b92008ef1c1da3ca51ef561c0b1666bfea114519b06fc4a659518cef458e
+VITE_VAULT_WASM_HASH=cb2a043f5a07224c24e1a90df9498a48b7ccd36fac745800e3ce66163288d22f
+VITE_NATIVE_TOKEN=CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC
 ```
 
 ---
@@ -211,7 +215,7 @@ stellar-orange-belt/
 
 Every push to `main` triggers:
 
-1. ✅ **Smart Contract Tests** — `cargo test` (6 tests)
+1. ✅ **Smart Contract Tests** — `cargo test` (7 tests)
 2. ✅ **WASM Build** — Builds factory + vault for deployment
 3. ✅ **Frontend Build** — `npm run build`
 
