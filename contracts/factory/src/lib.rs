@@ -13,6 +13,8 @@ pub struct BillInfo {
     pub participant_count: u32,
     pub deadline: u64,
     pub settled: bool,
+    pub participants: Vec<Address>,
+    pub shares: Vec<i128>,
 }
 
 #[contract]
@@ -50,6 +52,8 @@ impl SplitBillFactory {
             participant_count: participants.len(),
             deadline,
             settled: false,
+            participants: participants.clone(),
+            shares: shares.clone(),
         };
 
         let mut bills: Vec<BillInfo> = env.storage().instance().get(&Symbol::new(&env, "bills")).unwrap_or(Vec::new(&env));
@@ -66,10 +70,20 @@ impl SplitBillFactory {
     pub fn settle_bill(env: Env, vault_addr: Address) {
         let mut bills: Vec<BillInfo> = env.storage().instance().get(&Symbol::new(&env, "bills")).unwrap_or(Vec::new(&env));
         for i in 0..bills.len() {
-            let mut info = bills.get(i).unwrap();
-            if info.vault_id == vault_addr {
-                info.settled = true;
-                bills.set(i, info);
+            let old = bills.get(i).unwrap();
+            if old.vault_id == vault_addr && !old.settled {
+                let updated = BillInfo {
+                    vault_id: old.vault_id,
+                    creator: old.creator,
+                    title: old.title,
+                    total_xlm: old.total_xlm,
+                    participant_count: old.participant_count,
+                    deadline: old.deadline,
+                    settled: true,
+                    participants: old.participants,
+                    shares: old.shares,
+                };
+                bills.set(i, updated);
                 break;
             }
         }
@@ -82,6 +96,37 @@ impl SplitBillFactory {
 
     pub fn get_bills(env: Env) -> Vec<BillInfo> {
         env.storage().instance().get(&Symbol::new(&env, "bills")).unwrap_or(Vec::new(&env))
+    }
+
+    pub fn get_bills_for_user(env: Env, user: Address) -> Vec<BillInfo> {
+        let all_bills: Vec<BillInfo> = env.storage().instance().get(&Symbol::new(&env, "bills")).unwrap_or(Vec::new(&env));
+        let mut result = Vec::<BillInfo>::new(&env);
+        for i in 0..all_bills.len() {
+            let bill = all_bills.get(i).unwrap();
+            let mut found = false;
+            if bill.creator == user {
+                found = true;
+            } else {
+                for j in 0..bill.participants.len() {
+                    if bill.participants.get(j).unwrap() == user {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            if found {
+                result.push_back(bill);
+            }
+        }
+        result
+    }
+
+    pub fn get_bill_by_index(env: Env, index: u32) -> BillInfo {
+        let bills: Vec<BillInfo> = env.storage().instance().get(&Symbol::new(&env, "bills")).unwrap_or(Vec::new(&env));
+        if index >= bills.len() {
+            panic!("Bill not found");
+        }
+        bills.get(index).unwrap()
     }
 
     pub fn get_bill_count(env: Env) -> u32 {

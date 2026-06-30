@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { isConnected, getAddress, requestAccess, signTransaction } from "@stellar/freighter-api";
-import { Horizon, TransactionBuilder, Networks, xdr, Keypair, Operation, Address, authorizeEntry } from "stellar-sdk";
+import { Horizon, TransactionBuilder, Networks, xdr, Keypair, Operation, Address } from "stellar-sdk";
 
 const HORIZON_URL = import.meta.env.VITE_HORIZON_URL || "https://horizon-testnet.stellar.org";
 const RPC_URL = import.meta.env.VITE_RPC_URL || "https://soroban-testnet.stellar.org";
@@ -29,64 +29,63 @@ function scvI128(n: bigint): xdr.ScVal {
 }
 function scvU32(n: number): xdr.ScVal { return xdr.ScVal.scvU32(n); }
 function scvVec(items: xdr.ScVal[]): xdr.ScVal { return xdr.ScVal.scvVec(items); }
-function scvBool(v: xdr.ScVal | undefined): boolean {
-  if (!v) return false;
-  try { return v.bool(); } catch {}
-  try { return v.u32() !== 0; } catch {}
-  try { return v.i32() !== 0; } catch {}
-  return false;
-}
+
 type TxState = "idle" | "pending" | "success" | "fail";
 
-function billFromMap(m: any) {
-  const fields: Record<string, xdr.ScVal> = {};
-  const dec = new TextDecoder();
-  for (let i = 0; i < m.length; i++) {
-    const entry: any = m[i];
-    try {
-      const key = entry.key();
-      const keyStr = typeof key?._value !== "undefined"
-        ? dec.decode(key._value)
-        : key?.str?.()?.toString() ?? "";
-      if (!keyStr) continue;
-      const val = typeof entry.value === "function" ? entry.value() : entry.value;
-      if (!val) continue;
-      fields[keyStr] = val;
-    } catch {}
-  }
-  const addr = (scv: xdr.ScVal | undefined) => { try { return scv ? Address.fromScVal(scv).toString() : ""; } catch { return ""; } };
-  return {
-    vaultId: addr(fields.vault_id),
-    creator: addr(fields.creator),
-    title: fields.title?.str()?.toString() ?? "",
-    totalX: Number(fields.total_xlm?.i128()?.lo ?? 0n),
-    pCount: Number(fields.participant_count?.u32() ?? 0),
-    deadline: Number(fields.deadline?.u64()?.toString() ?? "0"),
-    settled: scvBool(fields.settled),
-  };
+interface Contribution { participant: string; amount: number; }
+
+interface BillInfo {
+  id: number; vault_id: string; creator: string; title: string;
+  total_xlm: number; participant_count: number; deadline: number; settled: boolean;
+  participants: string[]; shares: number[];
+  contributions: Contribution[];
+  status: string; withdrawn: boolean;
+  isCreator: boolean; isParticipant: boolean; userShare: number; userPaid: boolean;
 }
 
-function contribFromMap(m: any) {
+function parseBillFromMap(mapEntries: any[]): Record<string, xdr.ScVal> {
   const fields: Record<string, xdr.ScVal> = {};
-  const dec = new TextDecoder();
-  for (let i = 0; i < m.length; i++) {
-    const entry: any = m[i];
+  for (let i = 0; i < mapEntries.length; i++) {
     try {
-      const key = entry.key();
-      const keyStr = typeof key?._value !== "undefined"
-        ? dec.decode(key._value)
-        : key?.str?.()?.toString() ?? "";
+      const entry = mapEntries[i];
+      let keyStr = "";
+      try { keyStr = entry.key().sym()?.toString() ?? ""; } catch {}
       if (!keyStr) continue;
-      const val = typeof entry.value === "function" ? entry.value() : entry.value;
+      let val: xdr.ScVal | undefined;
+      try { val = entry.val(); } catch { try { val = entry.value(); } catch {} }
       if (!val) continue;
       fields[keyStr] = val;
     } catch {}
   }
-  const addr = (scv: xdr.ScVal | undefined) => { try { return scv ? Address.fromScVal(scv).toString() : ""; } catch { return ""; } };
-  return {
-    participant: addr(fields.participant),
-    amount: Number(fields.amount?.i128()?.lo ?? 0n),
-  };
+  return fields;
+}
+
+function parseBillInfo(mapEntries: any[], id: number): BillInfo | null {
+  try {
+    const f = parseBillFromMap(mapEntries);
+    const addr = (scv: xdr.ScVal | undefined) => { try { return scv ? Address.fromScVal(scv).toString() : ""; } catch { return ""; } };
+    const vaultId = addr(f.vault_id);
+    const creator = addr(f.creator);
+    const title = f.title?.str()?.toString() ?? "";
+    const totalXlm = Number(f.total_xlm?.i128()?.lo ?? 0n);
+    const pCount = Number(f.participant_count?.u32());
+    const deadline = Number(f.deadline?.u64()?.toString() ?? "0");
+    let settled = false;
+    if (f.settled) { try { settled = f.settled.bool(); } catch { try { settled = (f.settled.u32() ?? 0) !== 0; } catch {} } }
+
+    const participants: string[] = [];
+    if (f.participants) { let v; try { v = f.participants.vec(); } catch {} if (v) for (const p of v) { try { participants.push(Address.fromScVal(p).toString()); } catch {} } }
+    const shares: number[] = [];
+    if (f.shares) { let v; try { v = f.shares.vec(); } catch {} if (v) for (const s of v) { try { shares.push(Number(s.i128()?.lo ?? 0n)); } catch {} } }
+
+    return {
+      id, vault_id: vaultId, creator, title,
+      total_xlm: totalXlm, participant_count: pCount, deadline, settled,
+      participants, shares,
+      contributions: [], status: settled ? "Settled" : "Pending", withdrawn: false,
+      isCreator: false, isParticipant: false, userShare: 0, userPaid: false,
+    };
+  } catch { return null; }
 }
 
 async function rpcCall(method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -95,32 +94,22 @@ async function rpcCall(method: string, params: Record<string, unknown>): Promise
   return d.result as Record<string, unknown>;
 }
 
-interface Contribution { participant: string; amount: number; }
-
-interface BillInfo {
-  id: number; vault_id: string; creator: string; title: string;
-  total_xlm: number; participant_count: number; deadline: number; settled: boolean;
-  participants: string[]; shares: number[]; contributions: Contribution[];
-  status: string; isParticipant: boolean; userShare: number; userPaid: boolean;
-  withdrawn: boolean;
-}
-
 async function ensureFunded() {
-  try { await server.loadAccount(appKP.publicKey()); return; } catch {}
-  await fetch(`https://friendbot.stellar.org?addr=${appKP.publicKey()}`);
-  await new Promise((r) => setTimeout(r, 2000));
+  for (let i = 0; i < 3; i++) {
+    try { await server.loadAccount(appKP.publicKey()); return; } catch { if (i === 2) break; }
+    try { await fetch(`https://friendbot.stellar.org?addr=${appKP.publicKey()}`); } catch {}
+    await new Promise((r) => setTimeout(r, 2000));
+  }
   await server.loadAccount(appKP.publicKey());
 }
 
 async function deployVault(salt: Buffer): Promise<string> {
   const wasmHash = Buffer.from(VAULT_WASM, "hex");
   const deployerAddr = new Address(appKP.publicKey());
-
   const enc = new TextEncoder();
   const passBytes = enc.encode(Networks.TESTNET);
   const hashBuf = await crypto.subtle.digest("SHA-256", passBytes);
   const netId = xdr.Hash.fromXDR(Buffer.from(hashBuf).toString("hex"), "hex");
-
   const preimage = xdr.HashIdPreimage.envelopeTypeContractId(
     new xdr.HashIdPreimageContractId({
       networkId: netId,
@@ -144,8 +133,7 @@ async function deployVault(salt: Buffer): Promise<string> {
   const deployAuth: xdr.SorobanAuthorizationEntry[] = [];
   if (sim.results?.[0]?.auth) {
     for (const a of sim.results[0].auth) {
-      const entry = xdr.SorobanAuthorizationEntry.fromXDR(a, "base64");
-      deployAuth.push(await authorizeEntry(entry, appKP, Networks.TESTNET));
+      deployAuth.push(xdr.SorobanAuthorizationEntry.fromXDR(a, "base64"));
     }
   }
 
@@ -156,60 +144,19 @@ async function deployVault(salt: Buffer): Promise<string> {
     .addOperation(Operation.createCustomContract({ address: deployerAddr, wasmHash, salt, auth: deployAuth.length > 0 ? deployAuth : undefined }))
     .setTimeout(300).build();
   tx.sign(appKP);
+
   const send = await rpcCall("sendTransaction", { transaction: tx.toXDR() }) as unknown as { hash: string; errorResult?: string };
   if (send.errorResult) throw new Error(`Vault deploy failed: ${send.errorResult}`);
   for (let i = 0; i < 30; i++) {
     await new Promise((r) => setTimeout(r, 1000));
     const st = await rpcCall("getTransaction", { hash: send.hash }) as { status: string };
     if (st.status === "SUCCESS") return vaultId.toString();
-    if (st.status === "FAILED") throw new Error("Vault deploy failed: " + JSON.stringify((st as Record<string, unknown>).result ?? st));
+    if (st.status === "FAILED") throw new Error("Vault deploy failed");
   }
   throw new Error("Vault deploy timed out");
 }
 
-async function simSignSend(contractId: string, func: string, args: xdr.ScVal[], needAuth: boolean): Promise<{ hash: string; retval?: xdr.ScVal }> {
-  await ensureFunded();
-  const acct = await server.loadAccount(appKP.publicKey());
-  const raw = new TransactionBuilder(acct, { fee: "100000", networkPassphrase: Networks.TESTNET })
-    .addOperation(Operation.invokeContractFunction({ contract: contractId, function: func, args }))
-    .setTimeout(300).build();
-
-  const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { minResourceFee: string; transactionData: string; results?: Array<{ auth?: string[]; xdr?: string }>; error?: string };
-  if (sim.error) throw new Error(`Sim failed: ${sim.error}`);
-
-  const auth: xdr.SorobanAuthorizationEntry[] = [];
-  if (sim.results?.[0]?.auth) {
-    for (const a of sim.results[0].auth) {
-      const entry = xdr.SorobanAuthorizationEntry.fromXDR(a, "base64");
-      auth.push(await authorizeEntry(entry, appKP, Networks.TESTNET));
-    }
-  }
-
-  const fee = (parseInt(raw.fee, 10) + parseInt(sim.minResourceFee || "0", 10)).toString();
-  const sd = xdr.SorobanTransactionData.fromXDR(sim.transactionData, "base64");
-  const fresh = await server.loadAccount(appKP.publicKey());
-  const tx = new TransactionBuilder(fresh, { fee, networkPassphrase: Networks.TESTNET, sorobanData: sd })
-    .addOperation(Operation.invokeContractFunction({ contract: contractId, function: func, args, auth: auth.length > 0 ? auth : undefined }))
-    .setTimeout(300).build();
-  tx.sign(appKP);
-
-  const send = await rpcCall("sendTransaction", { transaction: tx.toXDR() }) as unknown as { hash?: string; status?: string; errorResult?: string };
-  if (!send.hash) throw new Error(`TX send failed: ${JSON.stringify(send)}`);
-  if (send.errorResult) throw new Error(`TX failed: ${send.errorResult}`);
-  for (let i = 0; i < 60; i++) {
-    await new Promise((r) => setTimeout(r, 1000));
-    const st = await rpcCall("getTransaction", { hash: send.hash }) as { status: string; resultXdr?: string };
-    if (st.status === "SUCCESS") {
-      let retval: xdr.ScVal | undefined;
-      if (sim.results?.[0]?.xdr) { try { retval = xdr.ScVal.fromXDR(sim.results[0].xdr, "base64"); } catch {} }
-      return { hash: send.hash, retval };
-    }
-    if (st.status === "FAILED") throw new Error(`${func} failed: ` + JSON.stringify((st as Record<string, unknown>).result ?? st));
-  }
-  throw new Error(`${func} timed out (last status: ${send.status || "unknown"})`);
-}
-
-async function simSignSendFreighter(contractId: string, func: string, args: xdr.ScVal[], addr: string): Promise<{ hash: string }> {
+async function simSignSend(contractId: string, func: string, args: xdr.ScVal[]): Promise<{ hash: string }> {
   await ensureFunded();
   const acct = await server.loadAccount(appKP.publicKey());
   const raw = new TransactionBuilder(acct, { fee: "100000", networkPassphrase: Networks.TESTNET })
@@ -219,100 +166,117 @@ async function simSignSendFreighter(contractId: string, func: string, args: xdr.
   const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { minResourceFee: string; transactionData: string; results?: Array<{ auth?: string[] }>; error?: string };
   if (sim.error) throw new Error(`Sim failed: ${sim.error}`);
 
+  const fee = (parseInt(raw.fee, 10) + parseInt(sim.minResourceFee || "0", 10)).toString();
+  const sd = xdr.SorobanTransactionData.fromXDR(sim.transactionData, "base64");
+  
   const auth: xdr.SorobanAuthorizationEntry[] = [];
   if (sim.results?.[0]?.auth) {
     for (const a of sim.results[0].auth) {
-      const entry = xdr.SorobanAuthorizationEntry.fromXDR(a, "base64");
-      auth.push(await authorizeEntry(entry, appKP, Networks.TESTNET));
+      auth.push(xdr.SorobanAuthorizationEntry.fromXDR(a, "base64"));
     }
   }
 
-  const fee = (parseInt(raw.fee, 10) + parseInt(sim.minResourceFee || "0", 10)).toString();
-  const sd = xdr.SorobanTransactionData.fromXDR(sim.transactionData, "base64");
   const fresh = await server.loadAccount(appKP.publicKey());
   const tx = new TransactionBuilder(fresh, { fee, networkPassphrase: Networks.TESTNET, sorobanData: sd })
     .addOperation(Operation.invokeContractFunction({ contract: contractId, function: func, args, auth: auth.length > 0 ? auth : undefined }))
     .setTimeout(300).build();
+  tx.sign(appKP);
 
-  const signedXdr = await signTransaction(tx.toXDR(), { networkPassphrase: Networks.TESTNET, accountToSign: addr });
-  const send = await rpcCall("sendTransaction", { transaction: signedXdr }) as unknown as { hash?: string; status?: string; errorResult?: string };
+  const send = await rpcCall("sendTransaction", { transaction: tx.toXDR() }) as unknown as { hash?: string; errorResult?: string };
   if (!send.hash) throw new Error(`TX send failed: ${JSON.stringify(send)}`);
   if (send.errorResult) throw new Error(`TX failed: ${send.errorResult}`);
   for (let i = 0; i < 60; i++) {
     await new Promise((r) => setTimeout(r, 1000));
     const st = await rpcCall("getTransaction", { hash: send.hash }) as { status: string };
     if (st.status === "SUCCESS") return { hash: send.hash };
-    if (st.status === "FAILED") throw new Error(`${func} failed: ` + JSON.stringify(st));
+    if (st.status === "FAILED") throw new Error(`${func} failed: ${JSON.stringify((st as Record<string, unknown>).result ?? st)}`);
   }
   throw new Error(`${func} timed out`);
 }
 
-async function readVault(vaultId: string): Promise<{
-  creator: string; title: string; total_xlm: number; deadline: number;
-  participants: string[]; shares: number[]; contributions: Contribution[];
-  status: string; withdrawn: boolean;
-} | null> {
+async function simSignUser(contractId: string, func: string, args: xdr.ScVal[], userAddr: string): Promise<{ hash: string }> {
+  await ensureFunded();
+  const acct = await server.loadAccount(appKP.publicKey());
+  const raw = new TransactionBuilder(acct, { fee: "100000", networkPassphrase: Networks.TESTNET })
+    .addOperation(Operation.invokeContractFunction({ contract: contractId, function: func, args }))
+    .setTimeout(300).build();
+
+  const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { minResourceFee: string; transactionData: string; results?: Array<{ auth?: string[] }>; error?: string };
+  if (sim.error) throw new Error(`Sim failed: ${sim.error}`);
+
+  const fee = (parseInt(raw.fee, 10) + parseInt(sim.minResourceFee || "0", 10)).toString();
+  const sd = xdr.SorobanTransactionData.fromXDR(sim.transactionData, "base64");
+
+  const auth: xdr.SorobanAuthorizationEntry[] = [];
+  if (sim.results?.[0]?.auth) {
+    for (const a of sim.results[0].auth) {
+      auth.push(xdr.SorobanAuthorizationEntry.fromXDR(a, "base64"));
+    }
+  }
+
+  const fresh = await server.loadAccount(appKP.publicKey());
+  const tx = new TransactionBuilder(fresh, { fee, networkPassphrase: Networks.TESTNET, sorobanData: sd })
+    .addOperation(Operation.invokeContractFunction({ contract: contractId, function: func, args, auth: auth.length > 0 ? auth : undefined }))
+    .setTimeout(300).build();
+
+  tx.sign(appKP);
+
+  const signedXdr = await signTransaction(tx.toXDR(), { networkPassphrase: Networks.TESTNET, accountToSign: userAddr });
+  const send = await rpcCall("sendTransaction", { transaction: signedXdr }) as unknown as { hash?: string; errorResult?: string };
+  if (!send.hash) throw new Error(`TX send failed: ${JSON.stringify(send)}`);
+  if (send.errorResult) throw new Error(`TX failed: ${send.errorResult}`);
+  for (let i = 0; i < 60; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const st = await rpcCall("getTransaction", { hash: send.hash }) as { status: string };
+    if (st.status === "SUCCESS") return { hash: send.hash };
+    if (st.status === "FAILED") throw new Error(`${func} failed: ${JSON.stringify((st as Record<string, unknown>).result ?? st)}`);
+  }
+  throw new Error(`${func} timed out`);
+}
+
+async function queryContributions(vaultId: string): Promise<{ contributions: Contribution[]; withdrawn: boolean }> {
   try {
     const acct = await server.loadAccount(appKP.publicKey());
-
-    // get_details returns (factory, creator, title, total, deadline, participants, shares, withdrawn)
     const raw = new TransactionBuilder(acct, { fee: "100", networkPassphrase: Networks.TESTNET })
       .addOperation(Operation.invokeContractFunction({ contract: vaultId, function: "get_details", args: [] }))
       .setTimeout(300).build();
     const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { results?: Array<{ xdr?: string }>; error?: string };
-    if (sim.error || !sim.results?.[0]?.xdr) return null;
+    if (sim.error || !sim.results?.[0]?.xdr) return { contributions: [], withdrawn: false };
+    
     const rv = xdr.ScVal.fromXDR(sim.results[0].xdr, "base64");
-    let fields: xdr.ScVal[];
-    try { fields = rv.vec(); } catch {}
-    if (!fields) return null;
-    const creator = Address.fromScVal(fields[1]).toString();
-    const title = fields[2]?.str()?.toString() ?? "";
-    const total = Number(fields[3]?.i128()?.lo ?? 0n);
-    const deadline = Number(fields[4]?.u64()?.toString() ?? "0");
-    const withdrawn = scvBool(fields[7]);
+    const fields = rv.vec();
+    if (!fields || fields.length < 8) return { contributions: [], withdrawn: false };
+    
+    let withdrawn = false;
+    if (fields[7]) { try { withdrawn = fields[7].bool(); } catch {} }
 
-    const participants: string[] = [];
-    if (fields[5]) { let vec; try { vec = fields[5].vec(); } catch {} if (vec) for (const v of vec) { try { participants.push(Address.fromScVal(v).toString()); } catch {} } }
-    const shares: number[] = [];
-    if (fields[6]) { let vec; try { vec = fields[6].vec(); } catch {} if (vec) for (const v of vec) { shares.push(Number(v.i128()?.lo ?? 0n)); } }
-
-    // get_status
     const raw2 = new TransactionBuilder(acct, { fee: "100", networkPassphrase: Networks.TESTNET })
-      .addOperation(Operation.invokeContractFunction({ contract: vaultId, function: "get_status", args: [] }))
-      .setTimeout(300).build();
-    const sim2 = await rpcCall("simulateTransaction", { transaction: raw2.toXDR() }) as unknown as { results?: Array<{ xdr?: string }>; error?: string };
-    let status = "Unknown";
-    if (sim2.results?.[0]?.xdr) {
-      const sv = xdr.ScVal.fromXDR(sim2.results[0].xdr, "base64");
-      const raw = sv.str()?.toString() ?? sv.u32()?.toString() ?? String(sv.vec()?.[0]?.str()?.toString() ?? "");
-      status = raw === "0" || raw === "Pending" ? "Pending" : raw === "1" || raw === "Settled" ? "Settled" : raw === "2" || raw === "Expired" ? "Expired" : raw;
-    }
-
-    // get_contributions
-    const raw3 = new TransactionBuilder(acct, { fee: "100", networkPassphrase: Networks.TESTNET })
       .addOperation(Operation.invokeContractFunction({ contract: vaultId, function: "get_contributions", args: [] }))
       .setTimeout(300).build();
-    const sim3 = await rpcCall("simulateTransaction", { transaction: raw3.toXDR() }) as unknown as { results?: Array<{ xdr?: string }>; error?: string };
-    const contribs: Contribution[] = [];
-    if (sim3.results?.[0]?.xdr) {
-      const cv = xdr.ScVal.fromXDR(sim3.results[0].xdr, "base64");
+    const sim2 = await rpcCall("simulateTransaction", { transaction: raw2.toXDR() }) as unknown as { results?: Array<{ xdr?: string }>; error?: string };
+    
+    const contributions: Contribution[] = [];
+    if (sim2.results?.[0]?.xdr) {
+      const cv = xdr.ScVal.fromXDR(sim2.results[0].xdr, "base64");
       const vec = cv.vec();
-      if (vec) for (const v of vec) {
-        let fv; try { fv = v.vec(); } catch {}
-        if (fv) {
-          let pa = ""; try { pa = Address.fromScVal(fv[0]).toString(); } catch {} contribs.push({ participant: pa, amount: Number(fv[1]?.i128()?.lo ?? 0n) });
-        } else {
+      if (vec) {
+        for (const v of vec) {
           let mv; try { mv = v.map(); } catch {}
           if (mv) {
-            const cm = contribFromMap(mv);
-            contribs.push({ participant: cm.participant, amount: cm.amount });
+            const f = parseBillFromMap(mv);
+            const addr = (scv: xdr.ScVal | undefined) => { try { return scv ? Address.fromScVal(scv).toString() : ""; } catch { return ""; } };
+            contributions.push({
+              participant: addr(f.participant),
+              amount: Number(f.amount?.i128()?.lo ?? 0n),
+            });
           }
         }
       }
     }
-
-    return { creator, title, total_xlm: total, deadline, participants, shares, contributions: contribs, status, withdrawn };
-  } catch { return null; }
+    return { contributions, withdrawn };
+  } catch {
+    return { contributions: [], withdrawn: false };
+  }
 }
 
 export default function Dashboard() {
@@ -333,7 +297,8 @@ export default function Dashboard() {
   const [payTx, setPayTx] = useState<TxState>("idle");
   const [status, setStatus] = useState<{ type: string; msg: string; txHash?: string } | null>(null);
   const [showWm, setShowWm] = useState(false);
-  const [showSuccess, setShowSuccess] = useState<{ vaultId: string; title: string; txHash: string } | null>(null);
+  const [showSuccess, setShowSuccess] = useState<{ index: number; vaultId: string; title: string; txHash: string } | null>(null);
+  const [loading, setLoading] = useState(false);
   const [sp] = useSearchParams();
 
   useEffect(() => { ensureFunded().then(() => setAppFunded(true)).catch(() => setAppFunded(false)); }, []);
@@ -347,42 +312,8 @@ export default function Dashboard() {
     try { const acct = await server.loadAccount(a); setBal(acct.balances.find((b: { asset_type: string }) => b.asset_type === "native")?.balance ?? "0"); } catch { setBal("0"); }
     finally { setFetching(false); }
   }, []);
+
   useEffect(() => { if (addr) fetchBal(addr); }, [addr, fetchBal]);
-
-  // Load bills: ?vault=VAULT_ID → load single vault directly, else load all from factory
-  const vaultParam = sp.get("vault");
-  useEffect(() => {
-    if (vaultParam) {
-      loadVaultBill(vaultParam);
-    } else if (addr) {
-      loadBills();
-    }
-  }, [addr, vaultParam]);
-
-  const loadVaultBill = async (vaultId: string) => {
-    setPayTx("pending"); setStatus(null);
-    try {
-      await ensureFunded();
-      const data = await readVault(vaultId);
-      if (!data) throw new Error("Failed to load bill from vault");
-      const isP = addr ? data.participants.includes(addr) : false;
-      const idx = isP ? data.participants.indexOf(addr!) : -1;
-      const userS = idx >= 0 ? (data.shares[idx] ?? data.total_xlm / data.participants.length) : data.total_xlm / data.participants.length;
-      const userPd = data.contributions.some(c => c.participant === addr);
-      const bill: BillInfo = {
-        id: 0, vault_id: vaultId, creator: data.creator, title: data.title,
-        total_xlm: data.total_xlm, participant_count: data.participants.length,
-        deadline: data.deadline, settled: data.status === "Settled",
-        participants: data.participants, shares: data.shares,
-        contributions: data.contributions, status: data.status,
-        isParticipant: isP, userShare: userS, userPaid: userPd,
-        withdrawn: data.withdrawn,
-      };
-      setBills([bill]);
-      setPayTx("idle");
-      setStatus({ type: "success", msg: "Bill loaded from share link!" });
-    } catch (e: unknown) { setPayTx("fail"); setStatus({ type: "error", msg: (e as Error).message }); }
-  };
 
   const connectWallet = async (walletId: string) => {
     try {
@@ -410,70 +341,92 @@ export default function Dashboard() {
     } catch { setStatus({ type: "error", msg: "Wallet not found." }); }
   };
 
-  const disconnect = () => { setAddr(null); setBal(null); setWalletName(""); setStatus(null); };
+  const disconnect = () => { setAddr(null); setBal(null); setWalletName(""); setBills([]); setStatus(null); };
 
-  const loadBills = async () => {
-    setPayTx("pending"); setStatus(null);
+  const loadBillByIndex = async (index: number) => {
+    setLoading(true); setStatus(null);
     try {
       await ensureFunded();
       const acct = await server.loadAccount(appKP.publicKey());
       const raw = new TransactionBuilder(acct, { fee: "100", networkPassphrase: Networks.TESTNET })
-        .addOperation(Operation.invokeContractFunction({ contract: FACTORY_ID, function: "get_bills", args: [] }))
+        .addOperation(Operation.invokeContractFunction({ contract: FACTORY_ID, function: "get_bill_by_index", args: [scvU32(index)] }))
         .setTimeout(300).build();
       const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { results?: Array<{ xdr?: string }>; error?: string };
-      if (sim.error) throw new Error(`Load failed: ${sim.error}`);
+      if (sim.error || !sim.results?.[0]?.xdr) throw new Error("Bill not found");
+
+      const rv = xdr.ScVal.fromXDR(sim.results[0].xdr, "base64");
+      const mapEntries = rv.map();
+      if (!mapEntries) throw new Error("Invalid bill data");
+      const bill = parseBillInfo(mapEntries, index);
+      if (!bill) throw new Error("Failed to parse bill");
+      bill.isCreator = !!addr && bill.creator === addr;
+      bill.isParticipant = !!addr && bill.participants.includes(addr);
+      if (bill.isParticipant) {
+        const uIdx = bill.participants.indexOf(addr!);
+        bill.userShare = uIdx >= 0 ? (bill.shares[uIdx] ?? bill.total_xlm / bill.participant_count) : bill.total_xlm / bill.participant_count;
+      }
+      const { contributions, withdrawn } = await queryContributions(bill.vault_id);
+      bill.contributions = contributions;
+      bill.withdrawn = withdrawn;
+      bill.userPaid = !!addr && contributions.some(c => c.participant === addr);
+      bill.status = bill.settled ? "Settled" : "Pending";
+      setBills([bill]);
+      setStatus({ type: "success", msg: "Bill loaded!" });
+    } catch (e: unknown) { setStatus({ type: "error", msg: (e as Error).message }); }
+    finally { setLoading(false); }
+  };
+
+  const loadBills = async () => {
+    if (!addr) return;
+    setLoading(true); setStatus(null);
+    try {
+      await ensureFunded();
+      const acct = await server.loadAccount(appKP.publicKey());
+      const raw = new TransactionBuilder(acct, { fee: "100", networkPassphrase: Networks.TESTNET })
+        .addOperation(Operation.invokeContractFunction({ contract: FACTORY_ID, function: "get_bills_for_user", args: [scvAddr(addr)] }))
+        .setTimeout(300).build();
+      const sim = await rpcCall("simulateTransaction", { transaction: raw.toXDR() }) as unknown as { results?: Array<{ xdr?: string }>; error?: string };
+      if (sim.error || !sim.results?.[0]?.xdr) throw new Error("No bills found");
+
+      const rv = xdr.ScVal.fromXDR(sim.results[0].xdr, "base64");
+      const vec = rv.vec();
+      if (!vec) { setBills([]); setStatus({ type: "success", msg: "No bills yet" }); return; }
 
       const enriched: BillInfo[] = [];
-      if (sim.results?.[0]?.xdr) {
-        const rv = xdr.ScVal.fromXDR(sim.results[0].xdr, "base64"); const vec = rv.vec();
-        if (vec) {
-          for (let i = 0; i < vec.length; i++) {
-            let f, m; try { f = vec[i].vec(); } catch {}
-            if (!f) try { m = vec[i].map(); } catch {}
-            if (!f && !m) continue;
-            let vaultId: string, creator: string, title: string, totalX: number, pCount: number, deadline: number, settled: boolean;
-            if (f) {
-              try { vaultId = Address.fromScVal(f[0]).toString(); } catch { vaultId = ""; }
-              try { creator = Address.fromScVal(f[1]).toString(); } catch { creator = ""; }
-              title = f[2]?.str()?.toString() ?? "";
-              totalX = Number(f[3]?.i128()?.lo ?? 0n);
-              pCount = Number(f[4]?.u32());
-              deadline = Number(f[5]?.u64()?.toString() ?? "0");
-              settled = scvBool(f[6]);
-            } else {
-              const bm = billFromMap(m);
-              vaultId = bm.vaultId; creator = bm.creator; title = bm.title;
-              totalX = bm.totalX; pCount = bm.pCount; deadline = bm.deadline; settled = bm.settled;
-            }
-
-            const vaultData = await readVault(vaultId);
-            const parts = vaultData?.participants ?? [];
-            const shares = vaultData?.shares ?? [];
-            const contribs = vaultData?.contributions ?? [];
-            const vStatus = vaultData?.status ?? (settled ? "Settled" : "Pending");
-            const withdrawn = vaultData?.withdrawn ?? false;
-            const isP = addr ? parts.includes(addr) : false;
-            const idx = isP ? parts.indexOf(addr!) : -1;
-            const userS = idx >= 0 ? (shares[idx] ?? totalX / pCount) : totalX / pCount;
-            const userPd = contribs.some(c => c.participant === addr);
-
-            enriched.push({
-              id: i, vault_id: vaultId, creator, title, total_xlm: totalX,
-              participant_count: pCount, deadline, settled: settled || vStatus === "Settled",
-              participants: parts, shares, contributions: contribs,
-              status: vStatus, isParticipant: isP, userShare: userS, userPaid: userPd,
-              withdrawn,
-            });
-          }
+      for (let i = 0; i < vec.length; i++) {
+        const mapEntries = vec[i].map();
+        if (!mapEntries) continue;
+        const bill = parseBillInfo(mapEntries, i);
+        if (!bill) continue;
+        bill.isCreator = bill.creator === addr;
+        bill.isParticipant = bill.participants.includes(addr);
+        if (bill.isParticipant) {
+          const uIdx = bill.participants.indexOf(addr);
+          bill.userShare = uIdx >= 0 ? (bill.shares[uIdx] ?? bill.total_xlm / bill.participant_count) : bill.total_xlm / bill.participant_count;
         }
+        const { contributions, withdrawn } = await queryContributions(bill.vault_id);
+        bill.contributions = contributions;
+        bill.withdrawn = withdrawn;
+        bill.userPaid = contributions.some(c => c.participant === addr);
+        bill.status = bill.settled || withdrawn ? "Settled" : "Pending";
+        enriched.push(bill);
       }
+
       setBills(enriched);
-      const billParam = sp.get("bill");
-      if (billParam) setTimeout(() => document.getElementById(`bill-${billParam}`)?.scrollIntoView({ behavior: "smooth" }), 300);
-      setStatus({ type: "success", msg: `Loaded ${enriched.length} bill${enriched.length !== 1 ? "s" : ""}` });
-      setPayTx("idle");
-    } catch (e: unknown) { setPayTx("fail"); setStatus({ type: "error", msg: (e as Error).message }); }
+      setStatus({ type: "success", msg: `${enriched.length} bill${enriched.length !== 1 ? "s" : ""} loaded` });
+    } catch (e: unknown) { setStatus({ type: "error", msg: (e as Error).message }); }
+    finally { setLoading(false); }
   };
+
+  const billIndex = sp.get("bill");
+  useEffect(() => {
+    if (!appFunded) return;
+    if (billIndex) {
+      loadBillByIndex(Number(billIndex));
+    } else if (addr) {
+      loadBills();
+    }
+  }, [addr, billIndex, appFunded]);
 
   const createBill = async () => {
     const addrs = payerAddrs.filter((p) => p.length > 0);
@@ -485,11 +438,10 @@ export default function Dashboard() {
     const shares: bigint[] = []; let total = 0n;
     for (let i = 0; i < sharesRaw.length; i++) {
       const v = BigInt(sharesRaw[i]);
-      if (v <= 0) return setStatus({ type: "error", msg: `Payer ${i + 1} share is 0 or negative. All shares must be > 0.` });
+      if (v <= 0) return setStatus({ type: "error", msg: `Payer ${i + 1} share is 0 or negative.` });
       shares.push(v); total += v;
     }
     if (BigInt(totalXlm) !== total) return setStatus({ type: "error", msg: `Sum of shares (${total}) ≠ total (${totalXlm}).` });
-
     const invalid = addrs.find((a) => !a.startsWith("G") || a.length !== 56);
     if (invalid) return setStatus({ type: "error", msg: `Invalid address: "${invalid.slice(0, 12)}…"` });
 
@@ -504,20 +456,21 @@ export default function Dashboard() {
         scvAddr(FACTORY_ID), scvAddr(appKP.publicKey()),
         scvVec(addrs.map((a) => scvAddr(a))), scvVec(shares.map((s) => scvI128(s))),
         scvStr(desc), scvI128(BigInt(totalXlm)), scvAddr(NATIVE_TOKEN),
-      ], false);
+      ]);
 
       setStatus({ type: "pending", msg: "Registering in factory..." });
       const { hash } = await simSignSend(FACTORY_ID, "register_bill", [
         scvAddr(vaultId), scvAddr(appKP.publicKey()),
         scvVec(addrs.map((a) => scvAddr(a))), scvVec(shares.map((s) => scvI128(s))),
         scvStr(desc),
-      ], false);
+      ]);
 
       setStatus({ type: "success", msg: "Bill created! ", txHash: hash });
       setDesc(""); setTotalXlm(""); setNumPayers(""); setPayerAddrs([]); setPayerShares([]);
       setCreateTx("success"); setTimeout(() => setCreateTx("idle"), 2000);
-      setTimeout(() => setShowSuccess({ vaultId, title: desc, txHash: hash }), 500);
-      loadBills();
+      const newIndex = bills.length;
+      setTimeout(() => setShowSuccess({ index: newIndex, vaultId, title: desc, txHash: hash }), 500);
+      setTimeout(() => loadBills(), 1000);
     } catch (e: unknown) {
       setCreateTx("fail");
       setStatus({ type: "error", msg: e instanceof Error ? e.message : String(e) });
@@ -529,7 +482,7 @@ export default function Dashboard() {
     if (!addr) return setStatus({ type: "error", msg: "Connect wallet to contribute." });
     setPayTx("pending"); setStatus(null);
     try {
-      const { hash } = await simSignSendFreighter(b.vault_id, "contribute", [scvAddr(addr)], addr);
+      const { hash } = await simSignUser(b.vault_id, "contribute", [scvAddr(addr)], addr);
       setStatus({ type: "success", msg: `Contributed ${(b.userShare / 1e7).toFixed(4)} XLM! `, txHash: hash });
       setPayTx("success"); setTimeout(() => setPayTx("idle"), 2000);
       loadBills();
@@ -540,7 +493,7 @@ export default function Dashboard() {
     if (!addr) return setStatus({ type: "error", msg: "Connect wallet to claim." });
     setPayTx("pending"); setStatus(null);
     try {
-      const { hash } = await simSignSendFreighter(b.vault_id, "withdraw", [scvAddr(addr)], addr);
+      const { hash } = await simSignUser(b.vault_id, "withdraw", [scvAddr(addr)], addr);
       setStatus({ type: "success", msg: `Claimed ${(b.total_xlm / 1e7).toFixed(4)} XLM from vault! `, txHash: hash });
       setPayTx("success"); setTimeout(() => setPayTx("idle"), 2000);
       loadBills();
@@ -575,7 +528,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Success Wizard Modal */}
       {showSuccess && (
         <div className="wallet-modal-overlay" onClick={() => setShowSuccess(null)}>
           <div className="wallet-modal" onClick={(e) => e.stopPropagation()} style={{ padding: "24px", width: "420px" }}>
@@ -590,12 +542,12 @@ export default function Dashboard() {
                 <div style={{ marginTop: 4 }}>TX: <a href={`${EXPLORER_BASE}/tx/${showSuccess.txHash}`} target="_blank" rel="noopener" style={{ color: "var(--accent-teal)" }}>{showSuccess.txHash.slice(0, 10)}…{showSuccess.txHash.slice(-6)}</a></div>
               </div>
               <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: 16 }}>
-                Share this link with participants so they can connect their wallet and contribute:
+                Share this link with participants so they can connect and contribute:
               </p>
               <div style={{ display: "flex", gap: 8 }}>
-                <input className="input input-sm" readOnly value={`${window.location.origin}/app?vault=${showSuccess.vaultId}`} style={{ flex: 1 }} />
+                <input className="input input-sm" readOnly value={`${window.location.origin}/app?bill=${showSuccess.index}`} style={{ flex: 1 }} />
                 <button className="btn btn-primary btn-sm" onClick={() => {
-                  navigator.clipboard.writeText(`${window.location.origin}/app?vault=${showSuccess.vaultId}`);
+                  navigator.clipboard.writeText(`${window.location.origin}/app?bill=${showSuccess.index}`);
                   setStatus({ type: "success", msg: "Link copied!" });
                 }}>Copy</button>
               </div>
@@ -637,10 +589,10 @@ export default function Dashboard() {
               <h3 className="guide-title">How it works</h3>
               <div className="guide-steps">
                 {[
-                  { n: "1", t: "Creator: Create a Bill", d: "Enter expense, total stroops, and ALL friends' wallet addresses + shares. A vault is deployed on-chain." },
-                  { n: "2", t: "Friends: Contribute", d: "Each friend connects their own wallet, finds the bill, and sends their share of XLM to the vault." },
+                  { n: "1", t: "Creator: Create a Bill", d: "Enter expense, total XLM, and ALL friends' wallet addresses + shares. A vault is deployed on-chain." },
+                  { n: "2", t: "Share the Link", d: "Copy & send the bill link to friends. Each opens it, connects their wallet, and contributes their share." },
                   { n: "3", t: "Auto-Settle", d: "When all shares are paid, the vault auto-sends the total to the creator via cross-contract call." },
-                  { n: "4", t: "Refund (if expired)", d: "If deadline passes before full payment, each contributor can withdraw their share back." },
+                  { n: "4", t: "Creator Claims", d: "Creator withdraws collected XLM from the vault. Fully on-chain, no trust needed." },
                 ].map((s, i) => (
                   <div key={i} className="guide-step"><span className="guide-num">{s.n}</span><div><strong>{s.t}</strong><p>{s.d}</p></div></div>
                 ))}
@@ -652,9 +604,7 @@ export default function Dashboard() {
         <div className="card card-full">
           <h2 className="guide-title" style={{ marginBottom: 14 }}>Create Bill</h2>
           <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: 20 }}>
-            {addr
-              ? "You are the creator. Enter ALL participant addresses and their share amounts. Friends will connect their own wallets to contribute."
-              : "Connect wallet first to create a bill as the creator."}
+            {addr ? "Enter details below. Friends will receive a share link to contribute." : "Connect wallet first to create a bill as the creator."}
           </p>
           {addr || appFunded ? (
             <>
@@ -676,38 +626,32 @@ export default function Dashboard() {
               {payerAddrs.map((_, i) => (
                 <div key={i} className="form-row" style={{ marginBottom: 8 }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <input className="input input-sm" placeholder={`Payer ${i + 1} address (G…) ${i === 0 && addr ? '(you)' : ''}`} value={payerAddrs[i]} onChange={(e) => { const a = [...payerAddrs]; a[i] = e.target.value; setPayerAddrs(a); }} />
+                    <input className="input input-sm" placeholder={`Payer ${i + 1} address (G…)${i === 0 && addr ? ' (you)' : ''}`} value={payerAddrs[i]} onChange={(e) => { const a = [...payerAddrs]; a[i] = e.target.value; setPayerAddrs(a); }} />
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <input className="input input-sm" type="number" placeholder={`Share (stroops)${i === 0 && addr ? ' — your portion' : ''}`} value={payerShares[i]} onChange={(e) => { const a = [...payerShares]; a[i] = e.target.value; setPayerShares(a); }} />
                   </div>
                 </div>
               ))}
-              {totalXlm && numPayers && Number(numPayers) > 0 && BigInt(totalXlm) % BigInt(Number(numPayers)) === 0n && payerShares.filter((s) => s).length === 0 && (
-                <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: 12 }}>
-                  Even split: {BigInt(totalXlm) / BigInt(Number(numPayers))} stroops each. Fill shares above or leave for equal split.
-                </div>
-              )}
               <button onClick={createBill} disabled={creating || !desc || !totalXlm || !numPayers || payerAddrs.filter((p) => p).length !== Number(numPayers) || payerShares.filter((s) => s).length !== Number(numPayers)} className="btn btn-primary btn-lg btn-full">
                 {creating ? "Deploying…" : "+ Create Bill"}
               </button>
-              {!addr && (
-                <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: 8, textAlign: "center" }}>Creator auth via wallet needed for register_bill. Connect Freighter.</p>
-              )}
             </>
           ) : (
             <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", textAlign: "center", padding: "20px 0" }}>Connect wallet to create a bill.</p>
           )}
         </div>
 
-        {(addr || vaultParam) && (
+        {(addr || billIndex) && (
           <div className="card card-full">
             <div className="dapp-card-header">
               <h3 className="guide-title" style={{ marginBottom: 0 }}>Bills</h3>
-              <button onClick={loadBills} className="btn btn-secondary btn-sm">Refresh</button>
+              {addr && <button onClick={loadBills} className="btn btn-secondary btn-sm">Refresh</button>}
             </div>
-            {bills.length === 0 ? (
-              <div className="empty-state"><p>No bills yet. Click Refresh to load from chain.</p></div>
+            {loading ? (
+              <div className="empty-state"><p>Loading bills from chain…</p></div>
+            ) : bills.length === 0 ? (
+              <div className="empty-state"><p>No bills yet. {addr ? "Click Refresh to load your bills." : `Loading bill #${billIndex}…`}</p></div>
             ) : bills.map((b) => {
               const collected = b.contributions.reduce((s, c) => s + c.amount, 0);
               const pct = b.participant_count > 0 ? (b.contributions.length / b.participant_count) * 100 : 0;
@@ -715,8 +659,8 @@ export default function Dashboard() {
               <div key={b.id} className="bill-card" id={`bill-${b.id}`}>
                 <div className="bill-card-head">
                   <div className="bill-badge bill-badge-id">#{b.id} · {f(b.vault_id)}</div>
-                  <div className={`bill-badge ${b.settled || b.status === "Settled" ? "bill-badge-done" : b.status === "Expired" ? "bill-badge-active" : "bill-badge-active"}`}>
-                    {b.status === "Settled" || b.settled ? "Settled" : b.status === "Expired" ? "Expired" : "Pending"}
+                  <div className={`bill-badge ${b.settled || b.withdrawn ? "bill-badge-done" : "bill-badge-active"}`}>
+                    {b.settled || b.withdrawn ? "Settled" : b.status === "Pending" ? "Pending" : b.status}
                   </div>
                 </div>
                 <h4 className="bill-title">{b.title}</h4>
@@ -743,7 +687,7 @@ export default function Dashboard() {
                   <div className="progress-fill" style={{ width: `${pct}%` }} />
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                  {b.isParticipant && !b.userPaid && !b.settled && b.status !== "Expired" && (
+                  {b.isParticipant && !b.userPaid && !b.settled && !b.withdrawn && (
                     <button onClick={() => contribute(b)} disabled={payTx === "pending"} className="btn btn-accent btn-sm" style={{ flex: 1 }}>
                       {payTx === "pending" ? "Sending…" : `Contribute ${(b.userShare / 1e7).toFixed(4)} XLM`}
                     </button>
@@ -751,10 +695,10 @@ export default function Dashboard() {
                   {b.isParticipant && b.userPaid && (
                     <span style={{ flex: 1, fontSize: "0.75rem", color: "var(--success)", fontWeight: 600, padding: "6px 0" }}>✓ Contributed</span>
                   )}
-                  {!b.isParticipant && !b.withdrawn && (
+                  {!b.isParticipant && !b.isCreator && (
                     <span style={{ flex: 1, fontSize: "0.7rem", color: "var(--text-muted)", padding: "6px 0" }}>Not a participant</span>
                   )}
-                  {addr === b.creator && b.settled && !b.withdrawn && (
+                  {b.isCreator && b.settled && !b.withdrawn && (
                     <button onClick={() => claimBill(b)} disabled={payTx === "pending"} className="btn btn-primary btn-sm" style={{ flex: 1 }}>
                       {payTx === "pending" ? "Claiming…" : `Claim ${(b.total_xlm / 1e7).toFixed(4)} XLM`}
                     </button>
@@ -763,7 +707,7 @@ export default function Dashboard() {
                     <span style={{ flex: 1, fontSize: "0.75rem", color: "var(--accent-teal)", fontWeight: 600, padding: "6px 0" }}>✓ Claimed</span>
                   )}
                   <button className="btn btn-ghost btn-xs" onClick={() => {
-                    const url = `${window.location.origin}/app?vault=${b.vault_id}`;
+                    const url = `${window.location.origin}/app?bill=${b.id}`;
                     navigator.clipboard.writeText(url);
                     setStatus({ type: "success", msg: "Share link copied!" });
                     setTimeout(() => setStatus(null), 2000);

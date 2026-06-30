@@ -6,7 +6,7 @@
 
 Two smart contracts communicating via inter-contract calls on Stellar Testnet.
 
-[![Tests](https://img.shields.io/badge/tests-7%20passed-brightgreen)](https://github.com/yt2025id-lab/stellar-split-bill/actions)
+[![Tests](https://img.shields.io/badge/tests-11%20passed-brightgreen)](https://github.com/yt2025id-lab/stellar-split-bill/actions)
 [![Soroban](https://img.shields.io/badge/soroban-sdk%20v22-blue)](https://soroban.stellar.org)
 [![React](https://img.shields.io/badge/react-19-61DAFB)](https://react.dev)
 [![License](https://img.shields.io/badge/license-MIT-purple)](LICENSE)
@@ -82,9 +82,11 @@ The central registry that manages all bills:
 
 | Function | Description |
 |----------|-------------|
-| `register_bill(creator, participants, shares, description)` | Register a new bill |
-| `settle_bill(bill_id, creator)` | Called by vault when fully funded |
+| `register_bill(creator, participants, shares, title)` | Register new bill with full participant data |
+| `settle_bill(vault_addr)` | Mark bill settled (called by vault via cross-contract) |
 | `get_bills()` | List all registered bills |
+| `get_bills_for_user(address)` | Filter bills by creator or participant |
+| `get_bill_by_index(index)` | Get single bill by index (for deep links) |
 
 ### BillVault (`contracts/vault/`)
 
@@ -106,11 +108,12 @@ One vault contract deployed per bill:
 ## Test Coverage
 
 ```
-SplitBillFactory (2 tests)          BillVault (5 tests)
+SplitBillFactory (5 tests)          BillVault (6 tests)
 ├── test_create_and_list_bills  ✅  ├── test_contribute_and_settle  ✅
-└── test_settle_bill            ✅  ├── test_partial_contribution   ✅
-                                    ├── test_double_contribute     ✅
-                                    ├── test_non_participant       ✅
+├── test_settle_bill            ✅  ├── test_partial_contribution   ✅
+├── test_get_bills_for_user     ✅  ├── test_double_contribute     ✅
+├── test_get_bill_by_index      ✅  ├── test_non_participant       ✅
+└── test_out_of_range           ✅  ├── test_init_twice_fails      ✅
                                     └── test_withdraw_after_settle ✅
 ```
 
@@ -126,7 +129,7 @@ cargo test
 | Contract | Address / Hash | Network |
 |----------|---------------|---------|
 | SplitBillFactory | [`CA7R7GECD23KFFLYSQRSAROZ52Y3UAEO6JAJBTO4WCK46PV3IJUY4L5M`](https://stellar.expert/explorer/testnet/contract/CA7R7GECD23KFFLYSQRSAROZ52Y3UAEO6JAJBTO4WCK46PV3IJUY4L5M) | Testnet |
-| BillVault WASM | `cb2a043f5a07224c24e1a90df9498a48b7ccd36fac745800e3ce66163288d22f` | Testnet |
+| BillVault WASM | `2b6661494e5ea8e66c473f8625ae917e33f4b5b03fd7757578251107e86fa3f5` | Testnet |
 
 ---
 
@@ -179,7 +182,7 @@ npm run dev        # → http://localhost:3001
 ```bash
 # frontend/.env
 VITE_FACTORY_CONTRACT=CA7R7GECD23KFFLYSQRSAROZ52Y3UAEO6JAJBTO4WCK46PV3IJUY4L5M
-VITE_VAULT_WASM_HASH=cb2a043f5a07224c24e1a90df9498a48b7ccd36fac745800e3ce66163288d22f
+VITE_VAULT_WASM_HASH=2b6661494e5ea8e66c473f8625ae917e33f4b5b03fd7757578251107e86fa3f5
 VITE_NATIVE_TOKEN=CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC
 ```
 
@@ -215,7 +218,7 @@ stellar-orange-belt/
 
 Every push to `main` triggers:
 
-1. ✅ **Smart Contract Tests** — `cargo test` (7 tests)
+1. ✅ **Smart Contract Tests** — `cargo test` (11 tests)
 2. ✅ **WASM Build** — Builds factory + vault for deployment
 3. ✅ **Frontend Build** — `npm run build`
 

@@ -104,6 +104,19 @@ fn test_partial_contribution() {
 }
 
 #[test]
+#[should_panic(expected = "Vault already initialized")]
+fn test_init_twice_fails() {
+    let env = Env::default();
+    let (vault_id, client, factory, creator, native_token) = setup_vault(&env);
+    let alice = Address::generate(&env);
+    let participants = Vec::from_array(&env, [alice.clone()]);
+    let shares = Vec::from_array(&env, [100i128]);
+
+    client.init(&factory, &creator, &participants, &shares, &String::from_str(&env, "Test"), &100, &native_token);
+    client.init(&factory, &creator, &participants, &shares, &String::from_str(&env, "Test"), &100, &native_token);
+}
+
+#[test]
 fn test_withdraw_after_settle() {
     let env = Env::default();
     let (vault_id, client, factory, creator, native_token) = setup_vault(&env);

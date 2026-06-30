@@ -37,6 +37,10 @@ impl BillVault {
         total_xlm: i128,
         native_token: Address,
     ) {
+        let inited: bool = env.storage().instance().get(&Symbol::new(&env, "__inited")).unwrap_or(false);
+        if inited { panic!("Vault already initialized"); }
+        env.storage().instance().set(&Symbol::new(&env, "__inited"), &true);
+
         env.storage().instance().set(&Symbol::new(&env, "factory"), &factory);
         env.storage().instance().set(&Symbol::new(&env, "creator"), &creator);
         env.storage().instance().set(&Symbol::new(&env, "title"), &title);
