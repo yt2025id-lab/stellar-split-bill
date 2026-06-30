@@ -172,7 +172,8 @@ async function simSignSend(contractId: string, func: string, args: xdr.ScVal[]):
   const auth: xdr.SorobanAuthorizationEntry[] = [];
   if (sim.results?.[0]?.auth) {
     for (const a of sim.results[0].auth) {
-      auth.push(xdr.SorobanAuthorizationEntry.fromXDR(a, "base64"));
+      const entry = xdr.SorobanAuthorizationEntry.fromXDR(a, "base64");
+      auth.push(await authorizeEntry(entry, appKP, Networks.TESTNET));
     }
   }
 
