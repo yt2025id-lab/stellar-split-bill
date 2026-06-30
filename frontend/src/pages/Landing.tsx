@@ -3,8 +3,8 @@ import StellarSplitBillLogo from "../StellarSplitBillLogo";
 
 const HORIZON_URL = import.meta.env.VITE_HORIZON_URL || "https://horizon-testnet.stellar.org";
 const RPC_URL = import.meta.env.VITE_RPC_URL || "https://soroban-testnet.stellar.org";
-const TOKEN_ID = import.meta.env.VITE_TOKEN_CONTRACT || "CCJ5MEBLFYVFOPN4EDO53IFQOCBWHO7SGIFEWXSKCTNHGTBZ6TTY53X5";
-const CORE_ID = import.meta.env.VITE_CORE_CONTRACT || "CCRVTPOVHJZ7KLANM2AEPIQPLSDWIDK2M66GJQHFEHJVJPHGDCKQOGJ3";
+const FACTORY_ID = import.meta.env.VITE_FACTORY_CONTRACT || "CA7R7GECD23KFFLYSQRSAROZ52Y3UAEO6JAJBTO4WCK46PV3IJUY4L5M";
+const NATIVE_XLM = import.meta.env.VITE_NATIVE_TOKEN || "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 const EXPLORER_BASE = "https://stellar.expert/explorer/testnet";
 
 export default function Landing() {
@@ -64,9 +64,9 @@ export default function Landing() {
           </div>
           <div className="features-grid">
             {[
-              { icon: "■■■", title: "On-Chain Settlement", desc: "Every payment tracked immutably on Stellar Soroban. No disputes, no 'I already paid' arguments — just cryptographic certainty." },
-              { icon: "◇◇◇", title: "Inter-Contract Composition", desc: "Split Core calls Split Token to burn obligation tokens automatically. True composability between Soroban contracts." },
-              { icon: "●●●", title: "Exact Splits, Always", desc: "The smart contract enforces exact even division with no remainders. No rounding errors, no awkward math, no drama." },
+              { icon: "■■■", title: "Native XLM Settlement", desc: "Participants pay their share in native XLM directly to the vault contract. No custom tokens, no wrapping — just real Stellar lumens." },
+              { icon: "◇◇◇", title: "Inter-Contract Auto-Settle", desc: "When fully funded, the vault atomically calls the factory via env.invoke_contract — both contracts emit events in a single transaction." },
+              { icon: "●●●", title: "Creator Withdraw", desc: "Once settled, the bill creator claims the total XLM from the vault. Transparent, trustless, and verifiable on-chain." },
             ].map((f, i) => (
               <div key={i} className="feature-card">
                 <div className="feature-icon">{f.icon}</div>
@@ -86,10 +86,10 @@ export default function Landing() {
           </div>
           <div className="steps-track">
             {[
-              { step: "01", title: "Create Bill", desc: "Enter the expense name, total amount, and your friends' Stellar wallet addresses." },
-              { step: "02", title: "Mint Obligation Tokens", desc: "Each payer receives obligation tokens equal to their share. Recorded on-chain, immutable." },
-              { step: "03", title: "Mark Paid", desc: "Pay your share. The contract burns your tokens — cryptographic proof that you've settled." },
-              { step: "04", title: "Auto-Complete", desc: "When everyone has paid, the bill auto-closes. No chasing, no reminders, no friction." },
+              { step: "01", title: "Create Bill", desc: "Enter the expense name, total XLM, and your friends' Stellar addresses. A vault contract is deployed for each bill." },
+              { step: "02", title: "Share Link", desc: "Share the unique vault link with participants. Each one connects their wallet and contributes their XLM share." },
+              { step: "03", title: "Auto-Settle", desc: "When everyone has paid, the vault calls the factory atomically via inter-contract communication — bill is settled on-chain." },
+              { step: "04", title: "Creator Claims", desc: "The bill creator withdraws the total XLM from the vault. Trustless. Verifiable. No chasing people." },
             ].map((s, i) => (
               <div key={i} className="step-card">
                 <span className="step-number">{s.step}</span>
@@ -110,14 +110,14 @@ export default function Landing() {
           </div>
           <div className="contract-grid">
             <div className="contract-card">
-              <span className="contract-label">Split Token</span>
-              <code className="contract-id">{TOKEN_ID}</code>
-              <a href={`${EXPLORER_BASE}/contract/${TOKEN_ID}`} target="_blank" rel="noopener" className="contract-link">View on Explorer &nearr;</a>
+              <span className="contract-label">SplitBillFactory</span>
+              <code className="contract-id">{FACTORY_ID}</code>
+              <a href={`${EXPLORER_BASE}/contract/${FACTORY_ID}`} target="_blank" rel="noopener" className="contract-link">View on Explorer &nearr;</a>
             </div>
             <div className="contract-card">
-              <span className="contract-label">Split Core</span>
-              <code className="contract-id">{CORE_ID}</code>
-              <a href={`${EXPLORER_BASE}/contract/${CORE_ID}`} target="_blank" rel="noopener" className="contract-link">View on Explorer &nearr;</a>
+              <span className="contract-label">Native XLM (Testnet)</span>
+              <code className="contract-id">{NATIVE_XLM}</code>
+              <a href={`${EXPLORER_BASE}/contract/${NATIVE_XLM}`} target="_blank" rel="noopener" className="contract-link">View on Explorer &nearr;</a>
             </div>
           </div>
         </div>
@@ -128,7 +128,7 @@ export default function Landing() {
           <span className="eyebrow">Ready to Split?</span>
           <h2 className="section-title" style={{ marginBottom: 24 }}>No more awkward money conversations</h2>
           <p className="section-subtitle" style={{ marginBottom: 32 }}>
-            Connect your Freighter wallet and start splitting bills on the Stellar network — fast, cheap, and trustlessly settled on-chain.
+            Connect your wallet (Freighter, Albedo, xBull, or Rabet) and start splitting bills on Stellar Soroban — fast, cheap, and trustlessly settled via inter-contract communication.
           </p>
           <button onClick={() => navigate("/app")} className="btn btn-primary btn-lg">
             Get Started &rarr;
