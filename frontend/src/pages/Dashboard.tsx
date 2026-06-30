@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { isConnected, getAddress, requestAccess, signTransaction } from "@stellar/freighter-api";
-import { Horizon, TransactionBuilder, Networks, xdr, Keypair, Operation, Address } from "stellar-sdk";
+import { Horizon, TransactionBuilder, Networks, xdr, Keypair, Operation, Address, authorizeEntry } from "stellar-sdk";
 
 const HORIZON_URL = import.meta.env.VITE_HORIZON_URL || "https://horizon-testnet.stellar.org";
 const RPC_URL = import.meta.env.VITE_RPC_URL || "https://soroban-testnet.stellar.org";
