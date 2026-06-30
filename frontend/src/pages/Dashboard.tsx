@@ -5,8 +5,8 @@ import { Horizon, TransactionBuilder, Networks, xdr, Keypair, Operation, Address
 
 const HORIZON_URL = import.meta.env.VITE_HORIZON_URL || "https://horizon-testnet.stellar.org";
 const RPC_URL = import.meta.env.VITE_RPC_URL || "https://soroban-testnet.stellar.org";
-const FACTORY_ID = import.meta.env.VITE_FACTORY_CONTRACT || "CCJV56TG4JJULVNC2S2MX5B2VOQL4AVMRV2UE66PIGYPR5YOOGMVANVA";
-const VAULT_WASM = import.meta.env.VITE_VAULT_WASM_HASH || "c46127bce2f034f35ba642b3a2a2e2b0323bd30e0935547d4f904f5eab19dcde";
+const FACTORY_ID = import.meta.env.VITE_FACTORY_CONTRACT || "CA2RF6MNBNMXM4KB54KHJCZVIQFWYXFACWXTCCR4C3RW4ENRSFKIXQIO";
+const VAULT_WASM = import.meta.env.VITE_VAULT_WASM_HASH || "cca0c4e70bae51f7fc2a44f47950b2fa7593e1743cc757eae93b52e5cddd620b";
 const NATIVE_TOKEN = import.meta.env.VITE_NATIVE_TOKEN || "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 const EXPLORER_BASE = "https://stellar.expert/explorer/testnet";
 
