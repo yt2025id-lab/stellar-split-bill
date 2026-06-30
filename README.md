@@ -150,7 +150,7 @@ cargo test
 | Wallets | Freighter, Albedo, xBull, Rabet |
 | Styling | Tailwind 4 • Dark theme |
 | CI/CD | GitHub Actions |
-| Hosting | [Vercel](https://frontend-ivory-nine-47.vercel.app) |
+| Hosting | [Vercel](https://stellar-orange-belt.vercel.app) |
 | Native XLM | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 
 ---

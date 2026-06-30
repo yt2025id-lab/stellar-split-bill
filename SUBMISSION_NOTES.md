@@ -23,7 +23,7 @@ Inter-contract communication with automatic settlement. Unlike simple escrow dAp
 
 ## Links
 - **GitHub**: https://github.com/yt2025id-lab/stellar-split-bill
-- **Live Demo**: https://frontend-ivory-nine-47.vercel.app
+- **Live Demo**: https://stellar-orange-belt.vercel.app
 - **Demo Video**: [INSERT YOUTUBE/DRIVE LINK]
 
 ## Contract Addresses (Testnet)
